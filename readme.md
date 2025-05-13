@@ -1,3 +1,5 @@
 # **Normjs**
 
-https://buddyledger.github.io/normjs/
+Coded with the help of ChatGPT o1
+
+https://buddyledger.github.io/NormJS/normjs.html

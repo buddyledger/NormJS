@@ -6,7 +6,7 @@
     <!-- Include Plotly.js -->
     <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
     <!-- Include jStat for statistical calculations -->
-    <script src="https://cdn.jsdelivr.net/npm/jstat@latest/dist/jstat.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jstat@1.9.6/dist/jstat.min.js"></script>
     <!-- Include MathJax for rendering equations -->
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <!-- Basic styling -->
@@ -26,6 +26,7 @@
         td.highlight { background-color: #e0f7fa !important; }
         .table-container { overflow-x: auto; }
         .table-controls { display: flex; gap: 20px; margin-bottom: 10px; }
+        .error { color: #c0392b; font-weight: bold; min-height: 1.2em; }
     </style>
 </head>
 <body>
@@ -59,6 +60,9 @@
                 </div>
             </div>
         </div>
+
+        <!-- Validation messages -->
+        <div class="error" id="error-message" role="alert" aria-live="polite"></div>
 
         <!-- Main Content Region -->
         <div class="quadrants">
@@ -112,9 +116,18 @@
             const minZInput = document.getElementById('minZ');
             const maxZInput = document.getElementById('maxZ');
 
+            const errorEl = document.getElementById('error-message');
+
+            // Debounce keystrokes so we don't re-plot and re-typeset on every character.
+            let debounceTimer;
+            function scheduleUpdate() {
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(updateAll, 150);
+            }
+
             // Event listeners for input changes
             [lowerInput, upperInput, meanInput, stddevInput, x0Input, minZInput, maxZInput].forEach(input => {
-                input.addEventListener('input', updateAll);
+                input.addEventListener('input', scheduleUpdate);
             });
 
             function updateAll() {
@@ -126,15 +139,28 @@
                 const minZ = parseFloat(minZInput.value);
                 const maxZ = parseFloat(maxZInput.value);
 
-                // Validate inputs
-                if (lowerPercent >= upperPercent || stddev <= 0) {
-                    alert('Please ensure that the lower confidence interval is less than the upper confidence interval and that the standard error is positive.');
+                // Validate inputs without blocking modals; leave the last good chart on screen.
+                if (![lowerPercent, upperPercent, mean, stddev, x0, minZ, maxZ].every(Number.isFinite)) {
+                    errorEl.textContent = 'Please fill in all fields with valid numbers.';
+                    return;
+                }
+                if (lowerPercent < 0 || upperPercent > 100) {
+                    errorEl.textContent = 'Confidence interval percentages must be between 0 and 100.';
+                    return;
+                }
+                if (lowerPercent >= upperPercent) {
+                    errorEl.textContent = 'Lower confidence interval must be less than the upper confidence interval.';
+                    return;
+                }
+                if (stddev <= 0) {
+                    errorEl.textContent = 'Standard error must be positive.';
                     return;
                 }
                 if (minZ >= maxZ) {
-                    alert('Minimum Z must be less than Maximum Z.');
+                    errorEl.textContent = 'Minimum Z must be less than Maximum Z.';
                     return;
                 }
+                errorEl.textContent = '';
 
                 // Calculate Z-scores for standard normal distribution
                 const zLower = jStat.normal.inv(lowerPercent / 100, 0, 1);
@@ -312,19 +338,19 @@
             }
 
             function updateEquations(mean, stddev, x0, z0) {
-		const tStatistic = (mean - x0) / stddev;
-                // Standard Normal Equation with Z₀ on its own line
+                // SE-based statistic is a z-score (a t-statistic would need the sample SD and df).
+                const zStatistic = (mean - x0) / stddev;
+
+                // Standard Normal panel: show where the null value falls on the standardized
+                // axis (matches the red Z₀ marker line, z0 = (X₀ - m)/SE).
                 const eqStandard = `\\[
                     f(z) = \\frac{1}{\\sqrt{2\\pi}} e^{-\\frac{z^2}{2}}
                 \\]
                 \\[
-                    Z_0 = ${z0.toFixed(4)}
-                \\]
-		\\[
-                    t = ${tStatistic.toFixed(4)}
+                    Z_0 = \\frac{X_0 - m}{SE} = ${z0.toFixed(4)}
                 \\]`;
 
-                // Scaled Normal Equation with X₀ on its own line
+                // Scaled Normal panel: distribution plus the hypothesis-test statistic.
                 const eqScaledVars = `\\[
                     f(x) = \\frac{1}{${stddev.toFixed(2)} \\sqrt{2\\pi}} e^{-\\frac{(x - ${mean.toFixed(2)})^2}{2 \\times ${stddev.toFixed(2)}^2}}
                 \\]
@@ -332,16 +358,40 @@
                     X_0 = ${x0.toFixed(4)}
                 \\]`;
 
-                // Corrected T-statistic
-                const eqTStatScaled = `\\[
-                    t = \\frac{m - X_0}{SE} = \\frac{${mean.toFixed(2)} - ${x0.toFixed(2)}}{${stddev.toFixed(2)}} = ${tStatistic.toFixed(4)}
+                const eqZStatScaled = `\\[
+                    z = \\frac{m - X_0}{SE} = \\frac{${mean.toFixed(2)} - ${x0.toFixed(2)}}{${stddev.toFixed(2)}} = ${zStatistic.toFixed(4)}
                 \\]`;
 
                 document.getElementById('equation-standard').innerHTML = eqStandard;
-                document.getElementById('equation-scaled').innerHTML = eqScaledVars + eqTStatScaled;
+                document.getElementById('equation-scaled').innerHTML = eqScaledVars + eqZStatScaled;
 
-                // Render equations with MathJax
-                MathJax.typesetPromise();
+                // Render equations with MathJax (guard in case the CDN script failed to load).
+                if (window.MathJax && MathJax.typesetPromise) {
+                    MathJax.typesetPromise();
+                }
+            }
+
+            function isHighlighted(zValue, zLower, zUpper, z0) {
+                return Math.abs(zValue - zLower) < 0.005 ||
+                       Math.abs(zValue - zUpper) < 0.005 ||
+                       Math.abs(zValue - z0) < 0.005;
+            }
+
+            // Build one z-table row whose label is `zIntFixed`. `sign` decides whether the
+            // hundredths column is added (positive side) or subtracted (negative side).
+            function appendTableRow(tbody, label, zIntFixed, sign, zStart, zEnd, zLower, zUpper, z0) {
+                const row = tbody.insertRow();
+                row.insertCell().innerText = label;
+                // Integer indices avoid floating-point drift from `+= 0.01` accumulation.
+                for (let d = 0; d <= 9; d++) {
+                    const zValue = parseFloat((zIntFixed + sign * (d / 100)).toFixed(2));
+                    if (zValue < zStart || zValue > zEnd) continue;
+                    const cell = row.insertCell();
+                    cell.innerText = jStat.normal.cdf(zValue, 0, 1).toFixed(6);
+                    if (isHighlighted(zValue, zLower, zUpper, z0)) {
+                        cell.classList.add('highlight');
+                    }
+                }
             }
 
             function updateCombinedTable(mean, stddev, zLower, zUpper, z0, minZ, maxZ) {
@@ -351,8 +401,8 @@
                 // Create header row
                 const header = table.createTHead().insertRow();
                 header.insertCell().innerHTML = '<strong>Z</strong>';
-                for (let col = 0.00; col <= 0.09; col += 0.01) {
-                    header.insertCell().innerHTML = `<strong>${col.toFixed(2)}</strong>`;
+                for (let d = 0; d <= 9; d++) {
+                    header.insertCell().innerHTML = `<strong>${(d / 100).toFixed(2)}</strong>`;
                 }
 
                 const tbody = table.createTBody();
@@ -360,102 +410,29 @@
                 // Determine the range for negative, zero, and positive Z-values
                 const zStart = Math.min(minZ, maxZ);
                 const zEnd = Math.max(minZ, maxZ);
+                const startTenths = Math.round(zStart * 10);
+                const endTenths = Math.round(zEnd * 10);
 
-                // Negative Z-values
-                for (let zInt = Math.min(-0.0, zStart); zInt <= -0.1 && zInt <= zEnd; zInt += 0.1) {
-                    const zIntFixed = parseFloat(zInt.toFixed(1));
-                    const row = tbody.insertRow();
-                    row.insertCell().innerText = zIntFixed.toFixed(1);
-
-                    for (let zDec = 0.00; zDec <= 0.09; zDec += 0.01) {
-                        const zValue = parseFloat((zIntFixed - zDec).toFixed(2));
-                        if (zValue < zStart || zValue > zEnd) continue;
-                        const pZ = jStat.normal.cdf(zValue, 0, 1);
-                        const cell = row.insertCell();
-                        cell.innerText = pZ.toFixed(6);
-
-                        // Highlight cells
-                        if (
-                            Math.abs(zValue - zLower) < 0.005 ||
-                            Math.abs(zValue - zUpper) < 0.005 ||
-                            Math.abs(zValue - z0) < 0.005
-                        ) {
-                            cell.classList.add('highlight');
-                        }
-                    }
+                // Negative Z-values (hundredths subtracted to go more negative)
+                for (let t = Math.min(0, startTenths); t <= -1 && t <= endTenths; t++) {
+                    const zIntFixed = t / 10;
+                    appendTableRow(tbody, zIntFixed.toFixed(1), zIntFixed, -1, zStart, zEnd, zLower, zUpper, z0);
                 }
 
-                // Z = -0.0 row
-                if (zStart <= -0.0 && zEnd >= -0.0) {
-                    const zIntFixed = -0.0;
-                    const row = tbody.insertRow();
-                    row.insertCell().innerText = '-0.0';
-
-                    for (let zDec = 0.00; zDec <= 0.09; zDec += 0.01) {
-                        const zValue = parseFloat((-0.0 - zDec).toFixed(2));
-                        if (zValue < zStart || zValue > zEnd) continue;
-                        const pZ = jStat.normal.cdf(zValue, 0, 1);
-                        const cell = row.insertCell();
-                        cell.innerText = pZ.toFixed(6);
-
-                        // Highlight cells
-                        if (
-                            Math.abs(zValue - zLower) < 0.005 ||
-                            Math.abs(zValue - zUpper) < 0.005 ||
-                            Math.abs(zValue - z0) < 0.005
-                        ) {
-                            cell.classList.add('highlight');
-                        }
-                    }
+                // Z = -0.0 row (negative hundredths)
+                if (zStart <= 0 && zEnd >= 0) {
+                    appendTableRow(tbody, '-0.0', 0, -1, zStart, zEnd, zLower, zUpper, z0);
                 }
 
-                // Z = 0.0 row
-                if (zStart <= 0.0 && zEnd >= 0.0) {
-                    const zIntFixed = 0.0;
-                    const row = tbody.insertRow();
-                    row.insertCell().innerText = '0.0';
-
-                    for (let zDec = 0.00; zDec <= 0.09; zDec += 0.01) {
-                        const zValue = parseFloat((zIntFixed + zDec).toFixed(2));
-                        if (zValue < zStart || zValue > zEnd) continue;
-                        const pZ = jStat.normal.cdf(zValue, 0, 1);
-                        const cell = row.insertCell();
-                        cell.innerText = pZ.toFixed(6);
-
-                        // Highlight cells
-                        if (
-                            Math.abs(zValue - zLower) < 0.005 ||
-                            Math.abs(zValue - zUpper) < 0.005 ||
-                            Math.abs(zValue - z0) < 0.005
-                        ) {
-                            cell.classList.add('highlight');
-                        }
-                    }
+                // Z = 0.0 row (positive hundredths)
+                if (zStart <= 0 && zEnd >= 0) {
+                    appendTableRow(tbody, '0.0', 0, 1, zStart, zEnd, zLower, zUpper, z0);
                 }
 
-                // Positive Z-values
-                for (let zInt = 0.1; zInt <= zEnd; zInt += 0.1) {
-                    if (zInt < zStart) continue;
-                    const zIntFixed = parseFloat(zInt.toFixed(1));
-                    const row = tbody.insertRow();
-                    row.insertCell().innerText = zIntFixed.toFixed(1);
-
-                    for (let zDec = 0.00; zDec <= 0.09; zDec += 0.01) {
-                        const zValue = parseFloat((zIntFixed + zDec).toFixed(2));
-                        if (zValue < zStart || zValue > zEnd) continue;
-                        const pZ = jStat.normal.cdf(zValue, 0, 1);
-                        const cell = row.insertCell();
-                        cell.innerText = pZ.toFixed(6);
-
-                        // Highlight cells
-                        if (
-                            Math.abs(zValue - zLower) < 0.005 ||
-                            Math.abs(zValue - zUpper) < 0.005 ||
-                            Math.abs(zValue - z0) < 0.005
-                        ) {
-                            cell.classList.add('highlight');
-                        }
-                    }
+                // Positive Z-values (hundredths added)
+                for (let t = Math.max(1, startTenths); t <= endTenths; t++) {
+                    const zIntFixed = t / 10;
+                    appendTableRow(tbody, zIntFixed.toFixed(1), zIntFixed, 1, zStart, zEnd, zLower, zUpper, z0);
                 }
             }
 

@@ -2,63 +2,176 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Normal Distribution Application</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NormJS — Normal Distribution Explorer</title>
     <!-- Include Plotly.js -->
     <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
     <!-- Include jStat for statistical calculations -->
     <script src="https://cdn.jsdelivr.net/npm/jstat@1.9.6/dist/jstat.min.js"></script>
     <!-- Include MathJax for rendering equations -->
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    <!-- Basic styling -->
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .container { display: grid; grid-template-rows: auto 1fr auto; grid-gap: 20px; }
-        .inputs { display: flex; justify-content: space-between; gap: 20px; }
-        .inputs .group { display: flex; gap: 20px; }
-        .inputs div { display: flex; flex-direction: column; }
-        .quadrants { display: grid; grid-template-columns: 1fr 1fr; grid-gap: 20px; }
-        .quadrant { border: 1px solid #ccc; padding: 10px; overflow: auto; }
-        .equation { margin-top: 10px; }
-        .output { margin-top: 10px; font-weight: bold; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { padding: 4px; text-align: right; border: 1px solid #ddd; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
-        td.highlight { background-color: #e0f7fa !important; }
-        .table-container { overflow-x: auto; }
-        .table-controls { display: flex; gap: 20px; margin-bottom: 10px; }
-        .error { color: #c0392b; font-weight: bold; min-height: 1.2em; }
+        :root {
+            --bg: #f4f6f9; --card: #ffffff; --border: #e2e8f0; --text: #1e293b; --muted: #64748b;
+            --accent: #2563eb; --accent-soft: #dbeafe; --highlight: #fde68a; --danger: #dc2626;
+            --thead-bg: #f1f5f9; --zebra: #fafbfc;
+            --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04); --radius: 10px;
+        }
+        [data-theme="dark"] {
+            --bg: #0f172a; --card: #1e293b; --border: #334155; --text: #e2e8f0; --muted: #94a3b8;
+            --accent: #60a5fa; --accent-soft: #1e3a5f; --highlight: #a16207; --danger: #f87171;
+            --thead-bg: #334155; --zebra: #243044;
+            --shadow: 0 1px 3px rgba(0,0,0,0.4);
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0; background: var(--bg); color: var(--text); line-height: 1.5;
+            transition: background .2s, color .2s;
+        }
+        .container { max-width: 1100px; margin: 0 auto; padding: 24px 20px 48px; }
+        header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; }
+        header h1 { margin: 0 0 4px; font-size: 1.6rem; letter-spacing: -0.01em; }
+        header p { margin: 0; color: var(--muted); font-size: 0.95rem; max-width: 60ch; }
+        .toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+
+        .btn {
+            font: inherit; font-size: 0.85rem; padding: 7px 12px; border: 1px solid var(--border);
+            background: var(--card); color: var(--text); border-radius: 8px; cursor: pointer;
+            transition: background .15s, border-color .15s, color .15s;
+        }
+        .btn:hover { border-color: var(--accent); }
+        .btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .seg { display: inline-flex; }
+        .seg .btn { border-radius: 0; border-right-width: 0; }
+        .seg .btn:first-child { border-radius: 8px 0 0 8px; }
+        .seg .btn:last-child { border-radius: 0 8px 8px 0; border-right-width: 1px; }
+
+        .inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+        fieldset.group {
+            border: 1px solid var(--border); border-radius: var(--radius); background: var(--card);
+            box-shadow: var(--shadow); padding: 12px 16px 16px; margin: 0;
+        }
+        fieldset.group legend {
+            font-weight: 600; font-size: 0.75rem; text-transform: uppercase;
+            letter-spacing: 0.05em; color: var(--muted); padding: 0 6px;
+        }
+        .fields { display: flex; flex-wrap: wrap; gap: 14px; }
+        .field { display: flex; flex-direction: column; gap: 5px; flex: 1 1 110px; }
+        .field label { font-size: 0.8rem; color: var(--muted); }
+        input[type="number"] {
+            width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+            font-size: 0.95rem; background: var(--card); color: var(--text);
+        }
+        input[type="number"]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+        input[type="range"] { width: 100%; accent-color: var(--accent); margin: 2px 0 0; }
+        .presets { display: flex; gap: 6px; margin-top: 12px; }
+        .presets .btn { padding: 5px 10px; font-size: 0.8rem; }
+
+        .error { color: var(--danger); font-weight: 600; min-height: 1.3em; margin: 8px 2px 12px; font-size: 0.9rem; }
+
+        .quadrants { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+        .card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); padding: 16px; }
+        .card h3 { margin: 0 0 10px; font-size: 1.05rem; }
+        #plot-standard, #plot-scaled { min-height: 300px; }
+        .equation { margin-top: 4px; overflow-x: auto; }
+        .output { margin-top: 12px; font-size: 0.85rem; color: var(--muted); }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-weight: 600; font-size: 0.78rem; }
+        .badge.ci { background: var(--accent-soft); color: var(--accent); }
+        .badge.rej { background: rgba(220,38,38,0.15); color: var(--danger); }
+        .badge.acc { background: rgba(22,163,74,0.15); color: #16a34a; }
+
+        details.collapsible { margin-top: 10px; }
+        details.collapsible > summary { cursor: pointer; font-size: 0.82rem; color: var(--muted); font-weight: 600; padding: 4px 0; }
+
+        .table-controls { display: flex; gap: 16px; margin: 10px 0 12px; flex-wrap: wrap; }
+        .table-controls .field { flex: 0 0 150px; }
+        .table-container { overflow: auto; max-height: 440px; border: 1px solid var(--border); border-radius: 8px; }
+        table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 0.82rem; }
+        th, td { padding: 5px 8px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+        thead th { position: sticky; top: 0; background: var(--thead-bg); font-weight: 600; z-index: 1; }
+        tbody tr:nth-child(even) { background: var(--zebra); }
+        td.highlight { background: var(--highlight) !important; font-weight: 600; }
+
+        @media (max-width: 860px) { .quadrants { grid-template-columns: 1fr; } }
+
+        .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; }
+        .card-head h3 { margin: 0; }
+        .btn-sm { padding: 4px 9px; font-size: 0.75rem; }
+        .hint { margin: 0 0 12px; color: var(--muted); font-size: 0.85rem; }
+        .sampling-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+        #plot-sampling { min-height: 280px; }
+        .walk { font-size: 0.9rem; }
+        .walk p { margin: 6px 0; }
+        .walk strong { color: var(--text); }
     </style>
 </head>
 <body>
     <div class="container">
+        <header>
+            <div>
+                <h1>NormJS</h1>
+                <p>Interactive normal distribution — drag the markers, adjust the sliders, and explore confidence intervals and z-tests.</p>
+            </div>
+            <div class="toolbar">
+                <button type="button" class="btn" id="copy-link">Copy link</button>
+                <button type="button" class="btn" id="reset-btn">Reset</button>
+                <button type="button" class="btn" id="theme-toggle">Dark mode</button>
+            </div>
+        </header>
+
         <!-- Input Region -->
         <div class="inputs">
-            <!-- Group Inputs for Standard Normal (Left side) -->
-            <div class="group">
-                <div>
-                    <label for="lower">Lower Confidence Interval (%)</label>
-                    <input type="number" id="lower" value="2.5" min="0" max="100" step="0.1">
+            <fieldset class="group">
+                <legend>Confidence Interval</legend>
+                <div class="fields">
+                    <div class="field">
+                        <label for="lower">Lower (%)</label>
+                        <input type="number" id="lower" value="2.5" min="0" max="100" step="0.1">
+                        <input type="range" id="lower-s" min="0" max="100" step="0.1" value="2.5">
+                    </div>
+                    <div class="field">
+                        <label for="upper">Upper (%)</label>
+                        <input type="number" id="upper" value="97.5" min="0" max="100" step="0.1">
+                        <input type="range" id="upper-s" min="0" max="100" step="0.1" value="97.5">
+                    </div>
                 </div>
-                <div>
-                    <label for="upper">Upper Confidence Interval (%)</label>
-                    <input type="number" id="upper" value="97.5" min="0" max="100" step="0.1">
+                <div class="presets">
+                    <button type="button" class="btn preset" data-ci="90">90%</button>
+                    <button type="button" class="btn preset" data-ci="95">95%</button>
+                    <button type="button" class="btn preset" data-ci="99">99%</button>
                 </div>
-            </div>
-            <!-- Group Inputs for Scaled Normal (Right side) -->
-            <div class="group">
-                <div>
-                    <label for="mean">Mean (m)</label>
-                    <input type="number" id="mean" value="0" step="0.1">
+            </fieldset>
+
+            <fieldset class="group">
+                <legend>Scaled Distribution</legend>
+                <div class="fields">
+                    <div class="field">
+                        <label for="mean">Mean (m)</label>
+                        <input type="number" id="mean" value="0" step="0.1">
+                        <input type="range" id="mean-s" min="-10" max="10" step="0.1" value="0">
+                    </div>
+                    <div class="field">
+                        <label for="stddev">Std. Error (SE)</label>
+                        <input type="number" id="stddev" value="1" min="0.0001" step="0.1">
+                        <input type="range" id="stddev-s" min="0.1" max="10" step="0.1" value="1">
+                    </div>
+                    <div class="field">
+                        <label for="x0">Null (X₀)</label>
+                        <input type="number" id="x0" value="0" step="0.1">
+                        <input type="range" id="x0-s" min="-10" max="10" step="0.1" value="0">
+                    </div>
                 </div>
-                <div>
-                    <label for="stddev">Standard Error (SE)</label>
-                    <input type="number" id="stddev" value="1" min="0.0001" step="0.1">
+            </fieldset>
+
+            <fieldset class="group">
+                <legend>Hypothesis Test</legend>
+                <div class="seg" id="tail-seg">
+                    <button type="button" class="btn active" data-tails="two">Two-tailed</button>
+                    <button type="button" class="btn" data-tails="left">Left</button>
+                    <button type="button" class="btn" data-tails="right">Right</button>
                 </div>
-                <div>
-                    <label for="x0">Null Hypothesis (X₀)</label>
-                    <input type="number" id="x0" value="0" step="0.1">
-                </div>
-            </div>
+            </fieldset>
         </div>
 
         <!-- Validation messages -->
@@ -66,319 +179,421 @@
 
         <!-- Main Content Region -->
         <div class="quadrants">
-            <!-- Upper Left Quadrant: Standard Normal Plot -->
-            <div class="quadrant" id="standard-normal-plot">
-                <h3>Standard Normal Distribution</h3>
+            <div class="card" id="standard-normal-plot">
+                <div class="card-head">
+                    <h3>Standard Normal Distribution</h3>
+                    <button type="button" class="btn btn-sm" id="png-standard">PNG</button>
+                </div>
                 <div id="plot-standard"></div>
-                <div class="equation" id="equation-standard"></div>
                 <div class="output" id="output-standard"></div>
+                <details class="collapsible" open>
+                    <summary>Equations</summary>
+                    <div class="equation" id="equation-standard"></div>
+                </details>
             </div>
-            <!-- Upper Right Quadrant: Scaled Normal Plot -->
-            <div class="quadrant" id="scaled-normal-plot">
-                <h3>Scaled Normal Distribution</h3>
+            <div class="card" id="scaled-normal-plot">
+                <div class="card-head">
+                    <h3>Scaled Normal Distribution</h3>
+                    <button type="button" class="btn btn-sm" id="png-scaled">PNG</button>
+                </div>
                 <div id="plot-scaled"></div>
-                <div class="equation" id="equation-scaled"></div>
                 <div class="output" id="output-scaled"></div>
+                <details class="collapsible" open>
+                    <summary>Equations</summary>
+                    <div class="equation" id="equation-scaled"></div>
+                </details>
             </div>
         </div>
 
+        <!-- Guided walkthrough -->
+        <div class="card" id="walkthrough-card">
+            <h3>Reading this test</h3>
+            <div class="walk" id="walkthrough"></div>
+        </div>
+
         <!-- Table Controls and Table -->
-        <div class="quadrant" id="combined-table">
-            <h3>Standard Normal Cumulative Table</h3>
-            <div class="table-controls">
-                <div>
-                    <label for="minZ">Minimum Z</label>
-                    <input type="number" id="minZ" value="-3" step="0.1">
-                </div>
-                <div>
-                    <label for="maxZ">Maximum Z</label>
-                    <input type="number" id="maxZ" value="3" step="0.1">
-                </div>
+        <div class="card" id="combined-table">
+            <div class="card-head">
+                <h3>Standard Normal Cumulative Table</h3>
+                <button type="button" class="btn btn-sm" id="csv-table">CSV</button>
             </div>
-            <div class="table-container">
-                <table id="table-combined">
-                    <!-- Table content will be inserted here -->
-                </table>
+            <details class="collapsible" open>
+                <summary>Show / hide table</summary>
+                <div class="table-controls">
+                    <div class="field">
+                        <label for="minZ">Minimum Z</label>
+                        <input type="number" id="minZ" value="-3" step="0.1">
+                        <input type="range" id="minZ-s" min="-5" max="0" step="0.1" value="-3">
+                    </div>
+                    <div class="field">
+                        <label for="maxZ">Maximum Z</label>
+                        <input type="number" id="maxZ" value="3" step="0.1">
+                        <input type="range" id="maxZ-s" min="0" max="5" step="0.1" value="3">
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="table-combined"></table>
+                </div>
+            </details>
+        </div>
+
+        <!-- Sampling simulator -->
+        <div class="card" id="sampling-card">
+            <div class="card-head">
+                <h3>Sampling Simulator</h3>
+                <button type="button" class="btn btn-sm" id="png-sampling">PNG</button>
             </div>
+            <p class="hint">Draw random observations from the scaled normal N(m, SE) and watch the histogram approach the theoretical curve.</p>
+            <div class="sampling-controls">
+                <button type="button" class="btn" id="draw-samples">Draw samples</button>
+                <button type="button" class="btn" id="clear-samples">Clear</button>
+                <span class="output" id="sampling-stats"></span>
+            </div>
+            <div id="plot-sampling"></div>
         </div>
     </div>
 
     <!-- JavaScript to handle interactions and plotting -->
     <script>
-        // Wait for the DOM to be fully loaded
-        document.addEventListener('DOMContentLoaded', (event) => {
-            // Get references to input elements
-            const lowerInput = document.getElementById('lower');
-            const upperInput = document.getElementById('upper');
-            const meanInput = document.getElementById('mean');
-            const stddevInput = document.getElementById('stddev');
-            const x0Input = document.getElementById('x0');
-            const minZInput = document.getElementById('minZ');
-            const maxZInput = document.getElementById('maxZ');
-
+        document.addEventListener('DOMContentLoaded', () => {
+            const keys = ['lower', 'upper', 'mean', 'stddev', 'x0', 'minZ', 'maxZ'];
+            const inputsMap = {}, slidersMap = {};
+            keys.forEach(k => { inputsMap[k] = document.getElementById(k); slidersMap[k] = document.getElementById(k + '-s'); });
+            const lowerInput = inputsMap.lower, upperInput = inputsMap.upper, meanInput = inputsMap.mean,
+                  stddevInput = inputsMap.stddev, x0Input = inputsMap.x0, minZInput = inputsMap.minZ, maxZInput = inputsMap.maxZ;
             const errorEl = document.getElementById('error-message');
 
-            // Debounce keystrokes so we don't re-plot and re-typeset on every character.
-            let debounceTimer;
-            function scheduleUpdate() {
-                clearTimeout(debounceTimer);
-                debounceTimer = setTimeout(updateAll, 150);
+            let tails = 'two';
+            const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+            const clampPct = p => clamp(p, 0, 100).toFixed(2);
+
+            let samples = [], drawTimer = null, prevMean = null, prevSE = null;
+            function randNormal(m, sd) {
+                let u = 0, v = 0;
+                while (u === 0) u = Math.random();
+                while (v === 0) v = Math.random();
+                return m + sd * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
             }
 
-            // Event listeners for input changes
-            [lowerInput, upperInput, meanInput, stddevInput, x0Input, minZInput, maxZInput].forEach(input => {
-                input.addEventListener('input', scheduleUpdate);
+            // --- Theme ---
+            function applyTheme(t) {
+                document.documentElement.dataset.theme = t;
+                try { localStorage.setItem('normjs-theme', t); } catch (_) {}
+                document.getElementById('theme-toggle').textContent = (t === 'dark') ? 'Light mode' : 'Dark mode';
+            }
+            (function initTheme() {
+                let saved = 'light';
+                try { saved = localStorage.getItem('normjs-theme') || 'light'; } catch (_) {}
+                applyTheme(saved === 'dark' ? 'dark' : 'light');
+            })();
+            function themeColors() {
+                const dark = document.documentElement.dataset.theme === 'dark';
+                return dark
+                    ? { paper: '#1e293b', plot: '#1e293b', font: '#e2e8f0', grid: '#334155', curve: '#60a5fa',
+                        ciFill: 'rgba(45,212,191,0.18)', ciLine: '#2dd4bf', rejFill: 'rgba(248,113,113,0.20)', nullLine: '#f87171' }
+                    : { paper: '#ffffff', plot: '#ffffff', font: '#1e293b', grid: '#e2e8f0', curve: '#2563eb',
+                        ciFill: 'rgba(13,148,136,0.18)', ciLine: '#0d9488', rejFill: 'rgba(220,38,38,0.15)', nullLine: '#dc2626' };
+            }
+
+            // --- Debounced update ---
+            let debounceTimer;
+            function scheduleUpdate() { clearTimeout(debounceTimer); debounceTimer = setTimeout(updateAll, 120); }
+
+            // --- Input <-> slider sync ---
+            keys.forEach(k => {
+                inputsMap[k].addEventListener('input', () => {
+                    const s = slidersMap[k];
+                    if (s) { const v = parseFloat(inputsMap[k].value); if (Number.isFinite(v)) s.value = clamp(v, +s.min, +s.max); }
+                    scheduleUpdate();
+                });
+                const s = slidersMap[k];
+                if (s) s.addEventListener('input', () => { inputsMap[k].value = s.value; scheduleUpdate(); });
+            });
+            function syncSlidersFromInputs() {
+                keys.forEach(k => {
+                    const s = slidersMap[k]; if (!s) return;
+                    const v = parseFloat(inputsMap[k].value);
+                    if (Number.isFinite(v)) s.value = clamp(v, +s.min, +s.max);
+                });
+            }
+
+            // --- Tail selector ---
+            document.getElementById('tail-seg').addEventListener('click', e => {
+                const btn = e.target.closest('button[data-tails]'); if (!btn) return;
+                tails = btn.dataset.tails;
+                document.querySelectorAll('#tail-seg button').forEach(b => b.classList.toggle('active', b === btn));
+                updateAll();
             });
 
-            function updateAll() {
-                const lowerPercent = parseFloat(lowerInput.value);
-                const upperPercent = parseFloat(upperInput.value);
-                const mean = parseFloat(meanInput.value);
-                const stddev = parseFloat(stddevInput.value);
-                const x0 = parseFloat(x0Input.value);
-                const minZ = parseFloat(minZInput.value);
-                const maxZ = parseFloat(maxZInput.value);
+            // --- Presets / reset ---
+            document.querySelectorAll('.preset').forEach(b => b.addEventListener('click', () => {
+                const ci = parseFloat(b.dataset.ci), tail = (100 - ci) / 2;
+                lowerInput.value = tail.toFixed(1); upperInput.value = (100 - tail).toFixed(1);
+                syncSlidersFromInputs(); updateAll();
+            }));
+            document.getElementById('reset-btn').addEventListener('click', () => {
+                const defs = { lower: '2.5', upper: '97.5', mean: '0', stddev: '1', x0: '0', minZ: '-3', maxZ: '3' };
+                keys.forEach(k => { inputsMap[k].value = defs[k]; });
+                tails = 'two';
+                document.querySelectorAll('#tail-seg button').forEach(b => b.classList.toggle('active', b.dataset.tails === 'two'));
+                syncSlidersFromInputs(); updateAll();
+            });
 
-                // Validate inputs without blocking modals; leave the last good chart on screen.
-                if (![lowerPercent, upperPercent, mean, stddev, x0, minZ, maxZ].every(Number.isFinite)) {
-                    errorEl.textContent = 'Please fill in all fields with valid numbers.';
-                    return;
+            // --- Theme toggle ---
+            document.getElementById('theme-toggle').addEventListener('click', () => {
+                const cur = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+                applyTheme(cur === 'dark' ? 'light' : 'dark');
+                updateAll();
+            });
+
+            // --- Sampling, export buttons ---
+            document.getElementById('draw-samples').addEventListener('click', drawSamples);
+            document.getElementById('clear-samples').addEventListener('click', clearSamples);
+            document.getElementById('csv-table').addEventListener('click', exportCSV);
+            const pngOpts = id => ({ format: 'png', filename: id, width: 1000, height: 600, scale: 2 });
+            document.getElementById('png-standard').addEventListener('click', () => Plotly.downloadImage('plot-standard', pngOpts('normjs-standard')));
+            document.getElementById('png-scaled').addEventListener('click', () => Plotly.downloadImage('plot-scaled', pngOpts('normjs-scaled')));
+            document.getElementById('png-sampling').addEventListener('click', () => Plotly.downloadImage('plot-sampling', pngOpts('normjs-sampling')));
+
+            // --- Shareable URL ---
+            document.getElementById('copy-link').addEventListener('click', () => {
+                const btn = document.getElementById('copy-link');
+                navigator.clipboard.writeText(location.href).then(() => {
+                    const old = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => btn.textContent = old, 1200);
+                }).catch(() => {});
+            });
+            function writeURL() {
+                const p = new URLSearchParams();
+                p.set('l', lowerInput.value); p.set('u', upperInput.value); p.set('m', meanInput.value);
+                p.set('se', stddevInput.value); p.set('x0', x0Input.value);
+                p.set('mn', minZInput.value); p.set('mx', maxZInput.value); p.set('t', tails);
+                history.replaceState(null, '', '#' + p.toString());
+            }
+            function readURL() {
+                if (!location.hash) return;
+                const p = new URLSearchParams(location.hash.slice(1));
+                const map = { l: 'lower', u: 'upper', m: 'mean', se: 'stddev', x0: 'x0', mn: 'minZ', mx: 'maxZ' };
+                Object.keys(map).forEach(k => {
+                    if (p.has(k)) { const v = p.get(k); if (v !== '' && Number.isFinite(parseFloat(v))) inputsMap[map[k]].value = v; }
+                });
+                if (p.has('t')) {
+                    const tv = p.get('t');
+                    if (['two', 'left', 'right'].includes(tv)) {
+                        tails = tv;
+                        document.querySelectorAll('#tail-seg button').forEach(b => b.classList.toggle('active', b.dataset.tails === tv));
+                    }
                 }
-                if (lowerPercent < 0 || upperPercent > 100) {
-                    errorEl.textContent = 'Confidence interval percentages must be between 0 and 100.';
-                    return;
-                }
-                if (lowerPercent >= upperPercent) {
-                    errorEl.textContent = 'Lower confidence interval must be less than the upper confidence interval.';
-                    return;
-                }
-                if (stddev <= 0) {
-                    errorEl.textContent = 'Standard error must be positive.';
-                    return;
-                }
-                if (minZ >= maxZ) {
-                    errorEl.textContent = 'Minimum Z must be less than Maximum Z.';
-                    return;
-                }
-                errorEl.textContent = '';
-
-                // Calculate Z-scores for standard normal distribution
-                const zLower = jStat.normal.inv(lowerPercent / 100, 0, 1);
-                const zUpper = jStat.normal.inv(upperPercent / 100, 0, 1);
-
-                // Calculate scaled values
-                const xLower = mean + zLower * stddev;
-                const xUpper = mean + zUpper * stddev;
-
-                // Calculate Z₀
-                const z0 = (x0 - mean) / stddev;
-
-                // Update plots
-                plotStandardNormal(zLower, zUpper, z0);
-                plotScaledNormal(mean, stddev, xLower, xUpper, x0);
-
-                // Update equations
-                updateEquations(mean, stddev, x0, z0);
-
-                // Update outputs
-                document.getElementById('output-standard').innerText = `Confidence Interval: ${(upperPercent - lowerPercent).toFixed(2)}%`;
-                document.getElementById('output-scaled').innerText = `Confidence Interval: ${(upperPercent - lowerPercent).toFixed(2)}%`;
-
-                // Update table
-                updateCombinedTable(mean, stddev, zLower, zUpper, z0, minZ, maxZ);
             }
 
-            function plotStandardNormal(zLower, zUpper, z0) {
-                const xValues = [];
-                const yValues = [];
-                for (let x = -4; x <= 4; x += 0.01) {
-                    xValues.push(x);
-                    yValues.push(jStat.normal.pdf(x, 0, 1));
-                }
+            // --- Plot helpers ---
+            function vLine(x, color, dash) {
+                return { type: 'line', xref: 'x', x0: x, x1: x, yref: 'paper', y0: 0, y1: 1, line: { color: color, width: 2, dash: dash } };
+            }
+            function shadeTrace(a, b, m, sd, fill) {
+                if (!(b > a)) return null;
+                const xs = [], ys = [], step = (b - a) / 200;
+                for (let x = a; x <= b; x += step) { xs.push(x); ys.push(jStat.normal.pdf(x, m, sd)); }
+                xs.push(b); ys.push(jStat.normal.pdf(b, m, sd));
+                return { x: [...xs, b, a], y: [...ys, 0, 0], fill: 'toself', type: 'scatter', mode: 'lines',
+                         fillcolor: fill, line: { color: 'transparent' }, hoverinfo: 'skip', showlegend: false };
+            }
 
-                const trace = {
-                    x: xValues,
-                    y: yValues,
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: 'Standard Normal Distribution',
-                    line: { color: 'blue' }
-                };
-
-                // Shaded area between zLower and zUpper
-                const shadedX = [];
-                const shadedY = [];
-                const step = 0.01;
-                let start = zLower;
-                let end = zUpper;
-
-                if (lowerInput.value == 0) {
-                    start = -4;
-                }
-                if (upperInput.value == 100) {
-                    end = 4;
-                }
-
-                if (start === end) {
-                    start -= 0.0001;
-                    end += 0.0001;
-                }
-
-                for (let x = start; x <= end; x += step) {
-                    shadedX.push(x);
-                    shadedY.push(jStat.normal.pdf(x, 0, 1));
-                }
-
-                const shadedArea = {
-                    x: [...shadedX, end, start],
-                    y: [...shadedY, 0, 0],
-                    fill: 'toself',
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: 'Confidence Interval',
-                    fillcolor: 'rgba(0, 100, 80, 0.2)',
-                    line: { color: 'transparent' }
-                };
-
-                // Z₀ line
-                const z0Line = {
-                    x: [z0, z0],
-                    y: [0, jStat.normal.pdf(z0, 0, 1)],
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: 'Null Hypothesis (Z₀)',
-                    line: { color: 'red', dash: 'dashdot' }
-                };
-
-                const data = [trace, shadedArea, z0Line];
-
+            function plotStandardNormal(s) {
+                const tc = themeColors();
+                const xs = [], ys = [], cd = [];
+                for (let i = 0; i <= 800; i++) { const x = -4 + i * 8 / 800; xs.push(x); ys.push(jStat.normal.pdf(x, 0, 1)); cd.push(jStat.normal.cdf(x, 0, 1)); }
+                const curve = { x: xs, y: ys, customdata: cd, type: 'scatter', mode: 'lines', line: { color: tc.curve, width: 2 },
+                                hovertemplate: 'z = %{x:.2f}<br>pdf = %{y:.4f}<br>cdf = %{customdata:.4f}<extra></extra>' };
+                const data = [curve];
+                let a = Number.isFinite(s.zLower) ? s.zLower : -4, b = Number.isFinite(s.zUpper) ? s.zUpper : 4;
+                if (s.lowerPct <= 0) a = -4;
+                if (s.upperPct >= 100) b = 4;
+                const ci = shadeTrace(a, b, 0, 1, tc.ciFill); if (ci) data.push(ci);
+                s.rejections.forEach(([ra, rb]) => { const t = shadeTrace(ra, rb, 0, 1, tc.rejFill); if (t) data.push(t); });
+                const shapes = [
+                    vLine(clamp(Number.isFinite(s.zLower) ? s.zLower : -4, -4, 4), tc.ciLine, 'dot'),
+                    vLine(clamp(Number.isFinite(s.zUpper) ? s.zUpper : 4, -4, 4), tc.ciLine, 'dot'),
+                    vLine(clamp(s.z0, -4, 4), tc.nullLine, 'dashdot')
+                ];
+                const annotations = [];
+                if (Number.isFinite(s.zLower)) annotations.push({ x: clamp(s.zLower, -4, 4), y: 1.02, yref: 'paper', text: `z* = ${s.zLower.toFixed(2)}`, showarrow: false, font: { size: 11, color: tc.ciLine }, xanchor: 'center', yanchor: 'bottom' });
+                if (Number.isFinite(s.zUpper)) annotations.push({ x: clamp(s.zUpper, -4, 4), y: 1.02, yref: 'paper', text: `z* = ${s.zUpper.toFixed(2)}`, showarrow: false, font: { size: 11, color: tc.ciLine }, xanchor: 'center', yanchor: 'bottom' });
+                s.rejections.forEach(([ra, rb]) => {
+                    const lo = Math.max(ra, -4), hi = Math.min(rb, 4);
+                    if (hi > lo) {
+                        const area = jStat.normal.cdf(hi, 0, 1) - jStat.normal.cdf(lo, 0, 1);
+                        if (area > 0.0005) annotations.push({ x: clamp((lo + hi) / 2, -3.7, 3.7), y: 0.08, yref: 'paper', text: area.toFixed(3), showarrow: false, font: { size: 11, color: tc.nullLine } });
+                    }
+                });
                 const layout = {
-                    xaxis: { title: 'Z', range: [-4, 4] },
-                    yaxis: { title: 'Probability Density' },
-                    showlegend: false
+                    xaxis: { title: 'Z', range: [-4, 4], gridcolor: tc.grid, zerolinecolor: tc.grid },
+                    yaxis: { title: 'Probability Density', gridcolor: tc.grid, zerolinecolor: tc.grid },
+                    showlegend: false, height: 300, autosize: true, margin: { t: 24, r: 16, b: 44, l: 56 },
+                    paper_bgcolor: tc.paper, plot_bgcolor: tc.plot, font: { color: tc.font }, shapes: shapes, annotations: annotations
                 };
-
-                Plotly.react('plot-standard', data, layout);
+                Plotly.react('plot-standard', data, layout, { responsive: true, displayModeBar: false, edits: { shapePosition: true } });
             }
 
-            function plotScaledNormal(mean, stddev, xLower, xUpper, x0) {
-                const xValues = [];
-                const yValues = [];
-                const minX = mean - 4 * stddev;
-                const maxX = mean + 4 * stddev;
-                const step = (maxX - minX) / 800;
-                for (let x = minX; x <= maxX; x += step) {
-                    xValues.push(x);
-                    yValues.push(jStat.normal.pdf(x, mean, stddev));
-                }
-
-                const trace = {
-                    x: xValues,
-                    y: yValues,
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: 'Scaled Normal Distribution',
-                    line: { color: 'blue' }
-                };
-
-                // Shaded area between xLower and xUpper
-                const shadedX = [];
-                const shadedY = [];
-                let start = xLower;
-                let end = xUpper;
-                const shadedStep = (maxX - minX) / 800;
-
-                if (lowerInput.value == 0) {
-                    start = minX;
-                }
-                if (upperInput.value == 100) {
-                    end = maxX;
-                }
-
-                if (start === end) {
-                    start -= 0.0001;
-                    end += 0.0001;
-                }
-
-                for (let x = start; x <= end; x += shadedStep) {
-                    shadedX.push(x);
-                    shadedY.push(jStat.normal.pdf(x, mean, stddev));
-                }
-
-                const shadedArea = {
-                    x: [...shadedX, end, start],
-                    y: [...shadedY, 0, 0],
-                    fill: 'toself',
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: 'Confidence Interval',
-                    fillcolor: 'rgba(0, 100, 80, 0.2)',
-                    line: { color: 'transparent' }
-                };
-
-                // X₀ line
-                const x0Line = {
-                    x: [x0, x0],
-                    y: [0, jStat.normal.pdf(x0, mean, stddev)],
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: 'Null Hypothesis (X₀)',
-                    line: { color: 'red', dash: 'dashdot' }
-                };
-
-                const data = [trace, shadedArea, x0Line];
-
+            function plotScaledNormal(s) {
+                const tc = themeColors();
+                const m = s.mean, sd = s.stddev, minX = m - 4 * sd, maxX = m + 4 * sd;
+                const xs = [], ys = [], cd = [];
+                for (let i = 0; i <= 800; i++) { const x = minX + i * (maxX - minX) / 800; xs.push(x); ys.push(jStat.normal.pdf(x, m, sd)); cd.push(jStat.normal.cdf(x, m, sd)); }
+                const curve = { x: xs, y: ys, customdata: cd, type: 'scatter', mode: 'lines', line: { color: tc.curve, width: 2 },
+                                hovertemplate: 'x = %{x:.2f}<br>pdf = %{y:.4f}<br>cdf = %{customdata:.4f}<extra></extra>' };
+                const data = [curve];
+                let a = Number.isFinite(s.xLower) ? s.xLower : minX, b = Number.isFinite(s.xUpper) ? s.xUpper : maxX;
+                if (s.lowerPct <= 0) a = minX;
+                if (s.upperPct >= 100) b = maxX;
+                const ci = shadeTrace(a, b, m, sd, tc.ciFill); if (ci) data.push(ci);
+                const shapes = [
+                    vLine(clamp(Number.isFinite(s.xLower) ? s.xLower : minX, minX, maxX), tc.ciLine, 'dot'),
+                    vLine(clamp(Number.isFinite(s.xUpper) ? s.xUpper : maxX, minX, maxX), tc.ciLine, 'dot'),
+                    vLine(clamp(s.x0, minX, maxX), tc.nullLine, 'dashdot')
+                ];
                 const layout = {
-                    xaxis: { title: 'X', range: [minX, maxX] },
-                    yaxis: { title: 'Probability Density' },
-                    showlegend: false
+                    xaxis: { title: 'X', range: [minX, maxX], gridcolor: tc.grid, zerolinecolor: tc.grid },
+                    yaxis: { title: 'Probability Density', gridcolor: tc.grid, zerolinecolor: tc.grid },
+                    showlegend: false, height: 300, autosize: true, margin: { t: 10, r: 16, b: 44, l: 56 },
+                    paper_bgcolor: tc.paper, plot_bgcolor: tc.plot, font: { color: tc.font }, shapes: shapes
                 };
-
-                Plotly.react('plot-scaled', data, layout);
+                Plotly.react('plot-scaled', data, layout, { responsive: true, displayModeBar: false, edits: { shapePosition: true } });
             }
 
+            // --- Sampling simulator ---
+            function plotSampling() {
+                const tc = themeColors();
+                const m = parseFloat(meanInput.value), sd = parseFloat(stddevInput.value);
+                if (!Number.isFinite(m) || !Number.isFinite(sd) || sd <= 0) return;
+                const minX = m - 4 * sd, maxX = m + 4 * sd;
+                const xs = [], ys = [];
+                for (let i = 0; i <= 200; i++) { const x = minX + i * (maxX - minX) / 200; xs.push(x); ys.push(jStat.normal.pdf(x, m, sd)); }
+                const data = [];
+                if (samples.length) {
+                    data.push({ x: samples, type: 'histogram', histnorm: 'probability density',
+                        marker: { color: tc.curve, opacity: 0.45 }, xbins: { start: minX, end: maxX, size: (maxX - minX) / 30 },
+                        hovertemplate: 'density = %{y:.4f}<extra></extra>' });
+                }
+                data.push({ x: xs, y: ys, type: 'scatter', mode: 'lines', line: { color: tc.nullLine, width: 2 }, hoverinfo: 'skip' });
+                const layout = {
+                    xaxis: { title: 'X', range: [minX, maxX], gridcolor: tc.grid, zerolinecolor: tc.grid },
+                    yaxis: { title: 'Density', gridcolor: tc.grid, zerolinecolor: tc.grid },
+                    showlegend: false, height: 280, autosize: true, margin: { t: 10, r: 16, b: 44, l: 56 }, bargap: 0.02,
+                    paper_bgcolor: tc.paper, plot_bgcolor: tc.plot, font: { color: tc.font }
+                };
+                Plotly.react('plot-sampling', data, layout, { responsive: true, displayModeBar: false });
+                const statsEl = document.getElementById('sampling-stats');
+                if (samples.length) {
+                    statsEl.textContent = `n = ${samples.length} · sample mean = ${jStat.mean(samples).toFixed(3)} · sample SD = ${jStat.stdev(samples, true).toFixed(3)} (theory: ${m.toFixed(2)}, ${sd.toFixed(2)})`;
+                } else {
+                    statsEl.textContent = 'No samples yet — click "Draw samples".';
+                }
+            }
+            function drawSamples() {
+                if (drawTimer) return;
+                const m = parseFloat(meanInput.value), sd = parseFloat(stddevInput.value);
+                if (!Number.isFinite(m) || !Number.isFinite(sd) || sd <= 0) return;
+                let added = 0; const target = 300, batch = 15;
+                drawTimer = setInterval(() => {
+                    for (let i = 0; i < batch; i++) samples.push(randNormal(m, sd));
+                    added += batch;
+                    plotSampling();
+                    if (added >= target) { clearInterval(drawTimer); drawTimer = null; }
+                }, 40);
+            }
+            function clearSamples() {
+                if (drawTimer) { clearInterval(drawTimer); drawTimer = null; }
+                samples = [];
+                plotSampling();
+            }
+
+            // --- Guided walkthrough ---
+            function buildWalkthrough(o) {
+                const h1 = o.tails === 'two' ? 'm ≠ X₀' : (o.tails === 'left' ? 'm < X₀' : 'm > X₀');
+                const concl = o.reject
+                    ? `Since p (${o.pStr}) < α (${o.alpha.toFixed(4)}), <strong>reject H₀</strong>.`
+                    : `Since p (${o.pStr}) ≥ α (${o.alpha.toFixed(4)}), <strong>fail to reject H₀</strong>.`;
+                return `
+                    <p><strong>Hypotheses.</strong> H₀: m = X₀ = ${o.x0.toFixed(2)} &nbsp;vs&nbsp; H₁: ${h1}.</p>
+                    <p><strong>Test statistic.</strong> z = (m − X₀) / SE = (${o.mean.toFixed(2)} − ${o.x0.toFixed(2)}) / ${o.sd.toFixed(2)} = <strong>${o.zStat.toFixed(4)}</strong>.</p>
+                    <p><strong>Significance level.</strong> α = ${o.alpha.toFixed(4)}, taken from the ${o.ciWidth.toFixed(1)}% confidence interval (${o.tailLabel}).</p>
+                    <p><strong>p-value.</strong> ${o.pStr}.</p>
+                    <p><strong>Decision.</strong> ${concl}</p>`;
+            }
+
+            // --- CSV export ---
+            function exportCSV() {
+                const table = document.getElementById('table-combined');
+                const rows = [...table.querySelectorAll('tr')].map(tr =>
+                    [...tr.children].map(c => c.innerText).join(','));
+                const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'normjs-ztable.csv';
+                document.body.appendChild(a); a.click(); a.remove();
+                URL.revokeObjectURL(a.href);
+            }
+
+            // --- Drag markers -> inputs ---
+            let dragListenersAttached = false;
+            function attachDragListeners() {
+                if (dragListenersAttached) return;
+                const ps = document.getElementById('plot-standard'), pc = document.getElementById('plot-scaled');
+                if (!ps.on || !pc.on) return;
+                ps.on('plotly_relayout', e => onDrag(e, 'standard'));
+                pc.on('plotly_relayout', e => onDrag(e, 'scaled'));
+                dragListenersAttached = true;
+            }
+            function onDrag(e, which) {
+                let changed = false;
+                const mean = parseFloat(meanInput.value), sd = parseFloat(stddevInput.value);
+                if (!Number.isFinite(mean) || !Number.isFinite(sd) || sd <= 0) return;
+                for (const k in e) {
+                    const m = k.match(/^shapes\[(\d+)\]\.x0$/); if (!m) continue;
+                    const idx = +m[1], val = e[k]; changed = true;
+                    if (which === 'standard') {
+                        if (idx === 0) lowerInput.value = clampPct(jStat.normal.cdf(val, 0, 1) * 100);
+                        else if (idx === 1) upperInput.value = clampPct(jStat.normal.cdf(val, 0, 1) * 100);
+                        else if (idx === 2) x0Input.value = (mean + val * sd).toFixed(2);
+                    } else {
+                        if (idx === 0) lowerInput.value = clampPct(jStat.normal.cdf((val - mean) / sd, 0, 1) * 100);
+                        else if (idx === 1) upperInput.value = clampPct(jStat.normal.cdf((val - mean) / sd, 0, 1) * 100);
+                        else if (idx === 2) x0Input.value = val.toFixed(2);
+                    }
+                }
+                if (changed) { syncSlidersFromInputs(); updateAll(); }
+            }
+
+            // --- Equations ---
             function updateEquations(mean, stddev, x0, z0) {
                 // SE-based statistic is a z-score (a t-statistic would need the sample SD and df).
                 const zStatistic = (mean - x0) / stddev;
-
-                // Standard Normal panel: show where the null value falls on the standardized
-                // axis (matches the red Z₀ marker line, z0 = (X₀ - m)/SE).
                 const eqStandard = `\\[
                     f(z) = \\frac{1}{\\sqrt{2\\pi}} e^{-\\frac{z^2}{2}}
                 \\]
                 \\[
                     Z_0 = \\frac{X_0 - m}{SE} = ${z0.toFixed(4)}
                 \\]`;
-
-                // Scaled Normal panel: distribution plus the hypothesis-test statistic.
                 const eqScaledVars = `\\[
                     f(x) = \\frac{1}{${stddev.toFixed(2)} \\sqrt{2\\pi}} e^{-\\frac{(x - ${mean.toFixed(2)})^2}{2 \\times ${stddev.toFixed(2)}^2}}
                 \\]
                 \\[
                     X_0 = ${x0.toFixed(4)}
                 \\]`;
-
                 const eqZStatScaled = `\\[
                     z = \\frac{m - X_0}{SE} = \\frac{${mean.toFixed(2)} - ${x0.toFixed(2)}}{${stddev.toFixed(2)}} = ${zStatistic.toFixed(4)}
                 \\]`;
-
                 document.getElementById('equation-standard').innerHTML = eqStandard;
                 document.getElementById('equation-scaled').innerHTML = eqScaledVars + eqZStatScaled;
-
-                // Render equations with MathJax (guard in case the CDN script failed to load).
-                if (window.MathJax && MathJax.typesetPromise) {
-                    MathJax.typesetPromise();
-                }
+                if (window.MathJax && MathJax.typesetPromise) { MathJax.typesetPromise(); }
             }
 
+            // --- Z-table ---
             function isHighlighted(zValue, zLower, zUpper, z0) {
                 return Math.abs(zValue - zLower) < 0.005 ||
                        Math.abs(zValue - zUpper) < 0.005 ||
                        Math.abs(zValue - z0) < 0.005;
             }
-
-            // Build one z-table row whose label is `zIntFixed`. `sign` decides whether the
-            // hundredths column is added (positive side) or subtracted (negative side).
             function appendTableRow(tbody, label, zIntFixed, sign, zStart, zEnd, zLower, zUpper, z0) {
                 const row = tbody.insertRow();
                 row.insertCell().innerText = label;
@@ -388,55 +603,113 @@
                     if (zValue < zStart || zValue > zEnd) continue;
                     const cell = row.insertCell();
                     cell.innerText = jStat.normal.cdf(zValue, 0, 1).toFixed(6);
-                    if (isHighlighted(zValue, zLower, zUpper, z0)) {
-                        cell.classList.add('highlight');
-                    }
+                    if (isHighlighted(zValue, zLower, zUpper, z0)) cell.classList.add('highlight');
                 }
             }
-
-            function updateCombinedTable(mean, stddev, zLower, zUpper, z0, minZ, maxZ) {
+            function updateCombinedTable(zLower, zUpper, z0, minZ, maxZ) {
                 const table = document.getElementById('table-combined');
-                table.innerHTML = ''; // Clear previous content
-
-                // Create header row
+                table.innerHTML = '';
                 const header = table.createTHead().insertRow();
                 header.insertCell().innerHTML = '<strong>Z</strong>';
-                for (let d = 0; d <= 9; d++) {
-                    header.insertCell().innerHTML = `<strong>${(d / 100).toFixed(2)}</strong>`;
-                }
-
+                for (let d = 0; d <= 9; d++) header.insertCell().innerHTML = `<strong>${(d / 100).toFixed(2)}</strong>`;
                 const tbody = table.createTBody();
-
-                // Determine the range for negative, zero, and positive Z-values
-                const zStart = Math.min(minZ, maxZ);
-                const zEnd = Math.max(minZ, maxZ);
-                const startTenths = Math.round(zStart * 10);
-                const endTenths = Math.round(zEnd * 10);
-
-                // Negative Z-values (hundredths subtracted to go more negative)
-                for (let t = Math.min(0, startTenths); t <= -1 && t <= endTenths; t++) {
-                    const zIntFixed = t / 10;
-                    appendTableRow(tbody, zIntFixed.toFixed(1), zIntFixed, -1, zStart, zEnd, zLower, zUpper, z0);
-                }
-
-                // Z = -0.0 row (negative hundredths)
-                if (zStart <= 0 && zEnd >= 0) {
-                    appendTableRow(tbody, '-0.0', 0, -1, zStart, zEnd, zLower, zUpper, z0);
-                }
-
-                // Z = 0.0 row (positive hundredths)
-                if (zStart <= 0 && zEnd >= 0) {
-                    appendTableRow(tbody, '0.0', 0, 1, zStart, zEnd, zLower, zUpper, z0);
-                }
-
-                // Positive Z-values (hundredths added)
-                for (let t = Math.max(1, startTenths); t <= endTenths; t++) {
-                    const zIntFixed = t / 10;
-                    appendTableRow(tbody, zIntFixed.toFixed(1), zIntFixed, 1, zStart, zEnd, zLower, zUpper, z0);
-                }
+                const zStart = Math.min(minZ, maxZ), zEnd = Math.max(minZ, maxZ);
+                const startTenths = Math.round(zStart * 10), endTenths = Math.round(zEnd * 10);
+                for (let t = Math.min(0, startTenths); t <= -1 && t <= endTenths; t++)
+                    appendTableRow(tbody, (t / 10).toFixed(1), t / 10, -1, zStart, zEnd, zLower, zUpper, z0);
+                if (zStart <= 0 && zEnd >= 0) appendTableRow(tbody, '-0.0', 0, -1, zStart, zEnd, zLower, zUpper, z0);
+                if (zStart <= 0 && zEnd >= 0) appendTableRow(tbody, '0.0', 0, 1, zStart, zEnd, zLower, zUpper, z0);
+                for (let t = Math.max(1, startTenths); t <= endTenths; t++)
+                    appendTableRow(tbody, (t / 10).toFixed(1), t / 10, 1, zStart, zEnd, zLower, zUpper, z0);
             }
 
-            // Initial update
+            // --- Main update ---
+            function updateAll() {
+                const lowerPercent = parseFloat(lowerInput.value);
+                const upperPercent = parseFloat(upperInput.value);
+                const mean = parseFloat(meanInput.value);
+                const stddev = parseFloat(stddevInput.value);
+                const x0 = parseFloat(x0Input.value);
+                const minZ = parseFloat(minZInput.value);
+                const maxZ = parseFloat(maxZInput.value);
+
+                if (![lowerPercent, upperPercent, mean, stddev, x0, minZ, maxZ].every(Number.isFinite)) {
+                    errorEl.textContent = 'Please fill in all fields with valid numbers.'; return;
+                }
+                if (lowerPercent < 0 || upperPercent > 100) {
+                    errorEl.textContent = 'Confidence interval percentages must be between 0 and 100.'; return;
+                }
+                if (lowerPercent >= upperPercent) {
+                    errorEl.textContent = 'Lower confidence interval must be less than the upper confidence interval.'; return;
+                }
+                if (stddev <= 0) {
+                    errorEl.textContent = 'Standard error must be positive.'; return;
+                }
+                if (minZ >= maxZ) {
+                    errorEl.textContent = 'Minimum Z must be less than Maximum Z.'; return;
+                }
+                errorEl.textContent = '';
+
+                // Samples are tied to the current distribution; discard them if it changed.
+                if (prevMean !== mean || prevSE !== stddev) samples = [];
+                prevMean = mean; prevSE = stddev;
+
+                const zLower = jStat.normal.inv(lowerPercent / 100, 0, 1);
+                const zUpper = jStat.normal.inv(upperPercent / 100, 0, 1);
+                const xLower = mean + zLower * stddev;
+                const xUpper = mean + zUpper * stddev;
+                const z0 = (x0 - mean) / stddev;
+                const zStat = (mean - x0) / stddev;
+                const alpha = Math.max(0, 1 - (upperPercent - lowerPercent) / 100);
+
+                // Rejection region(s) in z-space.
+                let rejections = [];
+                if (tails === 'two') {
+                    const lo = Number.isFinite(zLower) ? zLower : -4, hi = Number.isFinite(zUpper) ? zUpper : 4;
+                    rejections = [[-4, lo], [hi, 4]];
+                } else if (tails === 'left') {
+                    const zc = jStat.normal.inv(alpha, 0, 1);
+                    rejections = [[-4, Number.isFinite(zc) ? zc : -4]];
+                } else {
+                    const zc = jStat.normal.inv(1 - alpha, 0, 1);
+                    rejections = [[Number.isFinite(zc) ? zc : 4, 4]];
+                }
+
+                // p-value for the z statistic.
+                let p;
+                if (tails === 'two') p = 2 * (1 - jStat.normal.cdf(Math.abs(zStat), 0, 1));
+                else if (tails === 'left') p = jStat.normal.cdf(zStat, 0, 1);
+                else p = 1 - jStat.normal.cdf(zStat, 0, 1);
+                const reject = p < alpha;
+                const pStr = p < 0.0001 ? '< 0.0001' : p.toFixed(4);
+                const tailLabel = tails === 'two' ? 'two-tailed' : (tails === 'left' ? 'left-tailed' : 'right-tailed');
+
+                const state = { zLower, zUpper, z0, mean, stddev, x0, xLower, xUpper,
+                                lowerPct: lowerPercent, upperPct: upperPercent, rejections, tails };
+                plotStandardNormal(state);
+                plotScaledNormal(state);
+                updateEquations(mean, stddev, x0, z0);
+
+                document.getElementById('output-standard').innerHTML =
+                    `α = ${alpha.toFixed(4)} &nbsp;·&nbsp; p = ${pStr} (${tailLabel}) &nbsp;·&nbsp; ` +
+                    `<span class="badge ${reject ? 'rej' : 'acc'}">${reject ? 'Reject H₀' : 'Fail to reject H₀'}</span>`;
+                document.getElementById('output-scaled').innerHTML =
+                    `<span class="badge ci">CI width: ${(upperPercent - lowerPercent).toFixed(2)}%</span>`;
+
+                document.getElementById('walkthrough').innerHTML = buildWalkthrough({
+                    mean, sd: stddev, x0, zStat, alpha, pStr, reject, tails, tailLabel, ciWidth: upperPercent - lowerPercent
+                });
+
+                updateCombinedTable(zLower, zUpper, z0, minZ, maxZ);
+                plotSampling();
+                syncSlidersFromInputs();
+                writeURL();
+                attachDragListeners();
+            }
+
+            // Initialize from URL (if present), sync sliders, and render.
+            readURL();
+            syncSlidersFromInputs();
             updateAll();
         });
     </script>

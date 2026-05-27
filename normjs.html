@@ -94,6 +94,16 @@
         td.highlight { background: var(--highlight) !important; font-weight: 600; }
 
         @media (max-width: 860px) { .quadrants { grid-template-columns: 1fr; } }
+
+        .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; }
+        .card-head h3 { margin: 0; }
+        .btn-sm { padding: 4px 9px; font-size: 0.75rem; }
+        .hint { margin: 0 0 12px; color: var(--muted); font-size: 0.85rem; }
+        .sampling-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+        #plot-sampling { min-height: 280px; }
+        .walk { font-size: 0.9rem; }
+        .walk p { margin: 6px 0; }
+        .walk strong { color: var(--text); }
     </style>
 </head>
 <body>
@@ -170,7 +180,10 @@
         <!-- Main Content Region -->
         <div class="quadrants">
             <div class="card" id="standard-normal-plot">
-                <h3>Standard Normal Distribution</h3>
+                <div class="card-head">
+                    <h3>Standard Normal Distribution</h3>
+                    <button type="button" class="btn btn-sm" id="png-standard">PNG</button>
+                </div>
                 <div id="plot-standard"></div>
                 <div class="output" id="output-standard"></div>
                 <details class="collapsible" open>
@@ -179,7 +192,10 @@
                 </details>
             </div>
             <div class="card" id="scaled-normal-plot">
-                <h3>Scaled Normal Distribution</h3>
+                <div class="card-head">
+                    <h3>Scaled Normal Distribution</h3>
+                    <button type="button" class="btn btn-sm" id="png-scaled">PNG</button>
+                </div>
                 <div id="plot-scaled"></div>
                 <div class="output" id="output-scaled"></div>
                 <details class="collapsible" open>
@@ -189,9 +205,18 @@
             </div>
         </div>
 
+        <!-- Guided walkthrough -->
+        <div class="card" id="walkthrough-card">
+            <h3>Reading this test</h3>
+            <div class="walk" id="walkthrough"></div>
+        </div>
+
         <!-- Table Controls and Table -->
         <div class="card" id="combined-table">
-            <h3>Standard Normal Cumulative Table</h3>
+            <div class="card-head">
+                <h3>Standard Normal Cumulative Table</h3>
+                <button type="button" class="btn btn-sm" id="csv-table">CSV</button>
+            </div>
             <details class="collapsible" open>
                 <summary>Show / hide table</summary>
                 <div class="table-controls">
@@ -211,6 +236,21 @@
                 </div>
             </details>
         </div>
+
+        <!-- Sampling simulator -->
+        <div class="card" id="sampling-card">
+            <div class="card-head">
+                <h3>Sampling Simulator</h3>
+                <button type="button" class="btn btn-sm" id="png-sampling">PNG</button>
+            </div>
+            <p class="hint">Draw random observations from the scaled normal N(m, SE) and watch the histogram approach the theoretical curve.</p>
+            <div class="sampling-controls">
+                <button type="button" class="btn" id="draw-samples">Draw samples</button>
+                <button type="button" class="btn" id="clear-samples">Clear</button>
+                <span class="output" id="sampling-stats"></span>
+            </div>
+            <div id="plot-sampling"></div>
+        </div>
     </div>
 
     <!-- JavaScript to handle interactions and plotting -->
@@ -226,6 +266,14 @@
             let tails = 'two';
             const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
             const clampPct = p => clamp(p, 0, 100).toFixed(2);
+
+            let samples = [], drawTimer = null, prevMean = null, prevSE = null;
+            function randNormal(m, sd) {
+                let u = 0, v = 0;
+                while (u === 0) u = Math.random();
+                while (v === 0) v = Math.random();
+                return m + sd * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+            }
 
             // --- Theme ---
             function applyTheme(t) {
@@ -298,6 +346,15 @@
                 updateAll();
             });
 
+            // --- Sampling, export buttons ---
+            document.getElementById('draw-samples').addEventListener('click', drawSamples);
+            document.getElementById('clear-samples').addEventListener('click', clearSamples);
+            document.getElementById('csv-table').addEventListener('click', exportCSV);
+            const pngOpts = id => ({ format: 'png', filename: id, width: 1000, height: 600, scale: 2 });
+            document.getElementById('png-standard').addEventListener('click', () => Plotly.downloadImage('plot-standard', pngOpts('normjs-standard')));
+            document.getElementById('png-scaled').addEventListener('click', () => Plotly.downloadImage('plot-scaled', pngOpts('normjs-scaled')));
+            document.getElementById('png-sampling').addEventListener('click', () => Plotly.downloadImage('plot-sampling', pngOpts('normjs-sampling')));
+
             // --- Shareable URL ---
             document.getElementById('copy-link').addEventListener('click', () => {
                 const btn = document.getElementById('copy-link');
@@ -358,11 +415,21 @@
                     vLine(clamp(Number.isFinite(s.zUpper) ? s.zUpper : 4, -4, 4), tc.ciLine, 'dot'),
                     vLine(clamp(s.z0, -4, 4), tc.nullLine, 'dashdot')
                 ];
+                const annotations = [];
+                if (Number.isFinite(s.zLower)) annotations.push({ x: clamp(s.zLower, -4, 4), y: 1.02, yref: 'paper', text: `z* = ${s.zLower.toFixed(2)}`, showarrow: false, font: { size: 11, color: tc.ciLine }, xanchor: 'center', yanchor: 'bottom' });
+                if (Number.isFinite(s.zUpper)) annotations.push({ x: clamp(s.zUpper, -4, 4), y: 1.02, yref: 'paper', text: `z* = ${s.zUpper.toFixed(2)}`, showarrow: false, font: { size: 11, color: tc.ciLine }, xanchor: 'center', yanchor: 'bottom' });
+                s.rejections.forEach(([ra, rb]) => {
+                    const lo = Math.max(ra, -4), hi = Math.min(rb, 4);
+                    if (hi > lo) {
+                        const area = jStat.normal.cdf(hi, 0, 1) - jStat.normal.cdf(lo, 0, 1);
+                        if (area > 0.0005) annotations.push({ x: clamp((lo + hi) / 2, -3.7, 3.7), y: 0.08, yref: 'paper', text: area.toFixed(3), showarrow: false, font: { size: 11, color: tc.nullLine } });
+                    }
+                });
                 const layout = {
                     xaxis: { title: 'Z', range: [-4, 4], gridcolor: tc.grid, zerolinecolor: tc.grid },
                     yaxis: { title: 'Probability Density', gridcolor: tc.grid, zerolinecolor: tc.grid },
-                    showlegend: false, height: 300, autosize: true, margin: { t: 10, r: 16, b: 44, l: 56 },
-                    paper_bgcolor: tc.paper, plot_bgcolor: tc.plot, font: { color: tc.font }, shapes: shapes
+                    showlegend: false, height: 300, autosize: true, margin: { t: 24, r: 16, b: 44, l: 56 },
+                    paper_bgcolor: tc.paper, plot_bgcolor: tc.plot, font: { color: tc.font }, shapes: shapes, annotations: annotations
                 };
                 Plotly.react('plot-standard', data, layout, { responsive: true, displayModeBar: false, edits: { shapePosition: true } });
             }
@@ -391,6 +458,80 @@
                     paper_bgcolor: tc.paper, plot_bgcolor: tc.plot, font: { color: tc.font }, shapes: shapes
                 };
                 Plotly.react('plot-scaled', data, layout, { responsive: true, displayModeBar: false, edits: { shapePosition: true } });
+            }
+
+            // --- Sampling simulator ---
+            function plotSampling() {
+                const tc = themeColors();
+                const m = parseFloat(meanInput.value), sd = parseFloat(stddevInput.value);
+                if (!Number.isFinite(m) || !Number.isFinite(sd) || sd <= 0) return;
+                const minX = m - 4 * sd, maxX = m + 4 * sd;
+                const xs = [], ys = [];
+                for (let i = 0; i <= 200; i++) { const x = minX + i * (maxX - minX) / 200; xs.push(x); ys.push(jStat.normal.pdf(x, m, sd)); }
+                const data = [];
+                if (samples.length) {
+                    data.push({ x: samples, type: 'histogram', histnorm: 'probability density',
+                        marker: { color: tc.curve, opacity: 0.45 }, xbins: { start: minX, end: maxX, size: (maxX - minX) / 30 },
+                        hovertemplate: 'density = %{y:.4f}<extra></extra>' });
+                }
+                data.push({ x: xs, y: ys, type: 'scatter', mode: 'lines', line: { color: tc.nullLine, width: 2 }, hoverinfo: 'skip' });
+                const layout = {
+                    xaxis: { title: 'X', range: [minX, maxX], gridcolor: tc.grid, zerolinecolor: tc.grid },
+                    yaxis: { title: 'Density', gridcolor: tc.grid, zerolinecolor: tc.grid },
+                    showlegend: false, height: 280, autosize: true, margin: { t: 10, r: 16, b: 44, l: 56 }, bargap: 0.02,
+                    paper_bgcolor: tc.paper, plot_bgcolor: tc.plot, font: { color: tc.font }
+                };
+                Plotly.react('plot-sampling', data, layout, { responsive: true, displayModeBar: false });
+                const statsEl = document.getElementById('sampling-stats');
+                if (samples.length) {
+                    statsEl.textContent = `n = ${samples.length} · sample mean = ${jStat.mean(samples).toFixed(3)} · sample SD = ${jStat.stdev(samples, true).toFixed(3)} (theory: ${m.toFixed(2)}, ${sd.toFixed(2)})`;
+                } else {
+                    statsEl.textContent = 'No samples yet — click "Draw samples".';
+                }
+            }
+            function drawSamples() {
+                if (drawTimer) return;
+                const m = parseFloat(meanInput.value), sd = parseFloat(stddevInput.value);
+                if (!Number.isFinite(m) || !Number.isFinite(sd) || sd <= 0) return;
+                let added = 0; const target = 300, batch = 15;
+                drawTimer = setInterval(() => {
+                    for (let i = 0; i < batch; i++) samples.push(randNormal(m, sd));
+                    added += batch;
+                    plotSampling();
+                    if (added >= target) { clearInterval(drawTimer); drawTimer = null; }
+                }, 40);
+            }
+            function clearSamples() {
+                if (drawTimer) { clearInterval(drawTimer); drawTimer = null; }
+                samples = [];
+                plotSampling();
+            }
+
+            // --- Guided walkthrough ---
+            function buildWalkthrough(o) {
+                const h1 = o.tails === 'two' ? 'm ≠ X₀' : (o.tails === 'left' ? 'm < X₀' : 'm > X₀');
+                const concl = o.reject
+                    ? `Since p (${o.pStr}) < α (${o.alpha.toFixed(4)}), <strong>reject H₀</strong>.`
+                    : `Since p (${o.pStr}) ≥ α (${o.alpha.toFixed(4)}), <strong>fail to reject H₀</strong>.`;
+                return `
+                    <p><strong>Hypotheses.</strong> H₀: m = X₀ = ${o.x0.toFixed(2)} &nbsp;vs&nbsp; H₁: ${h1}.</p>
+                    <p><strong>Test statistic.</strong> z = (m − X₀) / SE = (${o.mean.toFixed(2)} − ${o.x0.toFixed(2)}) / ${o.sd.toFixed(2)} = <strong>${o.zStat.toFixed(4)}</strong>.</p>
+                    <p><strong>Significance level.</strong> α = ${o.alpha.toFixed(4)}, taken from the ${o.ciWidth.toFixed(1)}% confidence interval (${o.tailLabel}).</p>
+                    <p><strong>p-value.</strong> ${o.pStr}.</p>
+                    <p><strong>Decision.</strong> ${concl}</p>`;
+            }
+
+            // --- CSV export ---
+            function exportCSV() {
+                const table = document.getElementById('table-combined');
+                const rows = [...table.querySelectorAll('tr')].map(tr =>
+                    [...tr.children].map(c => c.innerText).join(','));
+                const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'normjs-ztable.csv';
+                document.body.appendChild(a); a.click(); a.remove();
+                URL.revokeObjectURL(a.href);
             }
 
             // --- Drag markers -> inputs ---
@@ -509,6 +650,10 @@
                 }
                 errorEl.textContent = '';
 
+                // Samples are tied to the current distribution; discard them if it changed.
+                if (prevMean !== mean || prevSE !== stddev) samples = [];
+                prevMean = mean; prevSE = stddev;
+
                 const zLower = jStat.normal.inv(lowerPercent / 100, 0, 1);
                 const zUpper = jStat.normal.inv(upperPercent / 100, 0, 1);
                 const xLower = mean + zLower * stddev;
@@ -551,7 +696,12 @@
                 document.getElementById('output-scaled').innerHTML =
                     `<span class="badge ci">CI width: ${(upperPercent - lowerPercent).toFixed(2)}%</span>`;
 
+                document.getElementById('walkthrough').innerHTML = buildWalkthrough({
+                    mean, sd: stddev, x0, zStat, alpha, pStr, reject, tails, tailLabel, ciWidth: upperPercent - lowerPercent
+                });
+
                 updateCombinedTable(zLower, zUpper, z0, minZ, maxZ);
+                plotSampling();
                 syncSlidersFromInputs();
                 writeURL();
                 attachDragListeners();

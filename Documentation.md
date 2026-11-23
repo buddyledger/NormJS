@@ -57,6 +57,6 @@ the interval bounds or Z₀ are highlighted.
 
 ## Dependencies
 
-Plotly 2.24.1, jStat 1.9.6, and MathJax 3, all loaded from CDNs at runtime. An
-internet connection (and reachable CDNs) is required unless the libraries are
-vendored locally.
+Plotly 2.24.1, jStat 1.9.6, and MathJax 3.2.2, vendored under `vendor/` and
+loaded from there. No internet connection is needed; the `vendor/` folder must
+stay alongside `normjs.html`. See `vendor/README.md` for sources and licences.

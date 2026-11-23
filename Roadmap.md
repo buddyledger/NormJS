@@ -3,7 +3,7 @@
 Ideas and planned improvements for NormJS, roughly ordered by value.
 
 ## Reliability
-- [ ] Vendor Plotly, jStat, and MathJax locally instead of loading from CDNs.
+- [x] Vendor Plotly, jStat, and MathJax locally instead of loading from CDNs.
       Removes the single point of failure, and enables offline use plus
       end-to-end testing in restricted networks.
 - [ ] Show a clear, visible message if a dependency fails to load, instead of a

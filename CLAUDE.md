@@ -15,33 +15,36 @@ Live: https://buddyledger.github.io/NormJS/normjs.html
 
 - `index.html` — meta-refresh redirect to `normjs.html`.
 - `normjs.html` — the entire app: HTML, CSS, and JS in one file.
+- `vendor/` — pinned third-party libraries (Plotly, jStat, MathJax + fonts).
 - `readme.md` — short project blurb.
 - `Documentation.md` — user/technical docs. `Roadmap.md` — planned work.
 
 There is no build step, package manager, or framework. Editing `normjs.html`
 edits the app.
 
-## External dependencies (CDN)
+## Dependencies (vendored)
 
-`normjs.html` loads three libraries from CDNs at runtime:
-- Plotly (`plotly-2.24.1`) — plotting
-- jStat (`jstat@1.9.6`) — normal pdf/cdf/inverse
-- MathJax (`mathjax@3`) — equation rendering
+`normjs.html` loads three libraries from `vendor/` (no CDN, no network):
+- Plotly (`vendor/plotly/plotly-2.24.1.min.js`) — plotting
+- jStat (`vendor/jstat/jstat-1.9.6.min.js`) — normal pdf/cdf/inverse
+- MathJax 3.2.2 (`vendor/mathjax/tex-mml-chtml.js` plus its fonts) — equation
+  rendering
 
 The page is fully dependent on these; if they fail to load it cannot plot or
-build the table. Keep the versions pinned.
+build the table. Keep the versions pinned and the files unmodified. MathJax
+finds its fonts relative to its own script, so keep the directory layout under
+`vendor/mathjax/`. See `vendor/README.md` for sources and upgrade notes.
 
 ## Running / testing
 
 Open `normjs.html` in any browser — no server required.
 
-Headless testing with Playwright works in principle (Chromium is available in
-this environment). **However, in the sandboxed web environment outbound requests
-to the CDNs are blocked by the network policy** (cert/proxy errors), so the
-libraries never load and the app is non-functional there. To test end-to-end in
-a restricted network you must vendor the libraries locally (see `Roadmap.md`).
-Pure logic (table enumeration, the statistic math) can be checked with Node
-without a browser.
+Because the libraries are vendored, the app also works end-to-end in restricted
+networks, so headless testing with Playwright (Chromium) needs no outbound
+access. To serve it over HTTP, run `python -m http.server 8765` from the repo
+root and open `http://localhost:8765/normjs.html` (`.claude/launch.json` has
+this as the `normjs-static` preview). Pure logic (table enumeration, the
+statistic math) can be checked with Node without a browser.
 
 ## Conventions
 

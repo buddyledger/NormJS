@@ -35,7 +35,8 @@ always symmetric (α/2 per tail), even if the interval percentiles are not.
 
 ### Scaled Normal panel
 The normal density N(m, SE) with the same confidence region shaded in the
-original units, a marker at X₀, and the test statistic:
+original units, a marker at X₀, the interval bounds (for example
+"95% CI: [-1.96, 1.96]"), and the test statistic:
 
     z = (m − X₀) / SE
 
@@ -44,7 +45,8 @@ this is a **z-statistic**, not a t-statistic.
 
 ### Cumulative z-table
 A standard normal CDF table over the chosen Z range, laid out like a printed
-z-table (tenths down the rows, hundredths across the columns). Cells matching
+z-table (tenths down the rows, hundredths across the columns). Values outside
+the chosen range are left blank so the columns stay aligned. Cells matching
 the interval bounds or Z₀ are highlighted.
 
 ## The math
@@ -60,3 +62,7 @@ the interval bounds or Z₀ are highlighted.
 Plotly 2.24.1, jStat 1.9.6, and MathJax 3.2.2, vendored under `vendor/` and
 loaded from there. No internet connection is needed; the `vendor/` folder must
 stay alongside `normjs.html`. See `vendor/README.md` for sources and licences.
+
+If Plotly or jStat fails to load, the page shows a message saying so instead of
+a blank view. If only MathJax fails, a warning is shown and everything except
+equation rendering still works.

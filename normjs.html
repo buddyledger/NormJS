@@ -51,7 +51,7 @@
         .inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
         fieldset.group {
             border: 1px solid var(--border); border-radius: var(--radius); background: var(--card);
-            box-shadow: var(--shadow); padding: 12px 16px 16px; margin: 0;
+            box-shadow: var(--shadow); padding: 12px 16px 16px; margin: 0; min-width: 0;
         }
         fieldset.group legend {
             font-weight: 600; font-size: 0.75rem; text-transform: uppercase;
@@ -69,9 +69,21 @@
         .presets { display: flex; gap: 6px; margin-top: 12px; }
         .presets .btn { padding: 5px 10px; font-size: 0.8rem; }
 
+        .load-error {
+            border: 1px solid var(--danger); border-left-width: 4px; border-radius: 8px; background: var(--card);
+            color: var(--text); padding: 12px 16px; margin-bottom: 16px; font-size: 0.95rem;
+        }
+        .load-error.warn { border-color: #d97706; }
+        .load-error code { font-size: 0.9em; }
+        /* Nothing below the banner can work without Plotly and jStat. */
+        body.load-failed .inputs, body.load-failed #error-message, body.load-failed .quadrants,
+        body.load-failed .card, body.load-failed .toolbar { display: none; }
+
         .error { color: var(--danger); font-weight: 600; min-height: 1.3em; margin: 8px 2px 12px; font-size: 0.9rem; }
 
-        .quadrants { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+        /* minmax(0, 1fr): let cards shrink below their content width (wide equations
+           scroll inside the card) instead of pushing the page wider than the screen. */
+        .quadrants { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-bottom: 16px; }
         .card { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); padding: 16px; }
         .card h3 { margin: 0 0 10px; font-size: 1.05rem; }
         #plot-standard, #plot-scaled { min-height: 300px; }
@@ -94,7 +106,7 @@
         tbody tr:nth-child(even) { background: var(--zebra); }
         td.highlight { background: var(--highlight) !important; font-weight: 600; }
 
-        @media (max-width: 860px) { .quadrants { grid-template-columns: 1fr; } }
+        @media (max-width: 860px) { .quadrants { grid-template-columns: minmax(0, 1fr); } }
 
         .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 8px; }
         .card-head h3 { margin: 0; }
@@ -120,6 +132,9 @@
                 <button type="button" class="btn" id="theme-toggle">Dark mode</button>
             </div>
         </header>
+
+        <!-- Shown only when a vendored library fails to load -->
+        <div class="load-error" id="load-error" role="alert" hidden></div>
 
         <!-- Input Region -->
         <div class="inputs">
@@ -257,7 +272,26 @@
     <!-- JavaScript to handle interactions and plotting -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            const keys = ['lower', 'upper', 'mean', 'stddev', 'x0', 'minZ', 'maxZ'];
+            // --- Dependency check: say what failed instead of leaving a blank page ---
+            const loadErrorEl = document.getElementById('load-error');
+            const missing = [];
+            if (typeof Plotly === 'undefined') missing.push('Plotly');
+            if (typeof jStat === 'undefined') missing.push('jStat');
+            if (missing.length) {
+                loadErrorEl.innerHTML = `<strong>NormJS could not start.</strong> ${missing.join(' and ')} failed to load. ` +
+                    'Check that the <code>vendor/</code> folder sits next to <code>normjs.html</code>, then reload the page.';
+                loadErrorEl.hidden = false;
+                document.body.classList.add('load-failed');
+                return;
+            }
+            if (!window.MathJax || !MathJax.version) {
+                loadErrorEl.innerHTML = 'MathJax failed to load, so equations are shown as plain TeX. Everything else works. ' +
+                    'Check that the <code>vendor/mathjax/</code> folder is present, then reload the page.';
+                loadErrorEl.classList.add('warn');
+                loadErrorEl.hidden = false;
+            }
+
+            const keys =['lower', 'upper', 'mean', 'stddev', 'x0', 'minZ', 'maxZ'];
             const inputsMap = {}, slidersMap = {};
             keys.forEach(k => { inputsMap[k] = document.getElementById(k); slidersMap[k] = document.getElementById(k + '-s'); });
             const lowerInput = inputsMap.lower, upperInput = inputsMap.upper, meanInput = inputsMap.mean,
@@ -267,6 +301,9 @@
             let tails = 'two';
             const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
             const clampPct = p => clamp(p, 0, 100).toFixed(2);
+            // Confidence level without trailing zeros (95, 97.5); interval bound in x units.
+            const fmtLevel = pct => String(parseFloat(pct.toFixed(2)));
+            const fmtBound = x => Number.isFinite(x) ? x.toFixed(2) : (x < 0 ? '−∞' : '∞');
 
             let samples = [], drawTimer = null, prevMean = null, prevSE = null;
             function randNormal(m, sd) {
@@ -602,14 +639,18 @@
                        Math.abs(zValue - zUpper) < 0.005 ||
                        Math.abs(zValue - z0) < 0.005;
             }
-            function appendTableRow(tbody, label, zIntFixed, sign, zStart, zEnd, zLower, zUpper, z0) {
+            // One row of the table. Everything is indexed in integer hundredths of z
+            // (no float accumulation): the row for `tenths` holds sign*(10*tenths + d)
+            // for d = 0..9. Out-of-range cells are rendered empty, not skipped, so the
+            // columns always line up with the header.
+            function appendTableRow(tbody, label, tenths, sign, startH, endH, zLower, zUpper, z0) {
                 const row = tbody.insertRow();
                 row.insertCell().innerText = label;
-                // Integer indices avoid floating-point drift from `+= 0.01` accumulation.
                 for (let d = 0; d <= 9; d++) {
-                    const zValue = parseFloat((zIntFixed + sign * (d / 100)).toFixed(2));
-                    if (zValue < zStart || zValue > zEnd) continue;
+                    const h = sign * (10 * tenths + d);
                     const cell = row.insertCell();
+                    if (h < startH || h > endH) continue;
+                    const zValue = h / 100;
                     cell.innerText = jStat.normal.cdf(zValue, 0, 1).toFixed(6);
                     if (isHighlighted(zValue, zLower, zUpper, z0)) cell.classList.add('highlight');
                 }
@@ -623,14 +664,17 @@
                 addTh('Z');
                 for (let d = 0; d <= 9; d++) addTh((d / 100).toFixed(2));
                 const tbody = table.createTBody();
-                const zStart = Math.min(minZ, maxZ), zEnd = Math.max(minZ, maxZ);
-                const startTenths = Math.round(zStart * 10), endTenths = Math.round(zEnd * 10);
-                for (let t = Math.min(0, startTenths); t <= -1 && t <= endTenths; t++)
-                    appendTableRow(tbody, (t / 10).toFixed(1), t / 10, -1, zStart, zEnd, zLower, zUpper, z0);
-                if (zStart <= 0 && zEnd >= 0) appendTableRow(tbody, '-0.0', 0, -1, zStart, zEnd, zLower, zUpper, z0);
-                if (zStart <= 0 && zEnd >= 0) appendTableRow(tbody, '0.0', 0, 1, zStart, zEnd, zLower, zUpper, z0);
-                for (let t = Math.max(1, startTenths); t <= endTenths; t++)
-                    appendTableRow(tbody, (t / 10).toFixed(1), t / 10, 1, zStart, zEnd, zLower, zUpper, z0);
+                // Range in integer hundredths.
+                const startH = Math.round(Math.min(minZ, maxZ) * 100), endH = Math.round(Math.max(minZ, maxZ) * 100);
+                // Negative rows (label -t/10, including "-0.0") hold hundredths -(10t+9) .. -10t;
+                // a row is shown when any of its cells falls inside the range.
+                const negFirst = Math.max(0, Math.ceil(-(endH + 9) / 10)), negLast = Math.floor(-startH / 10);
+                for (let t = negLast; t >= negFirst; t--)
+                    appendTableRow(tbody, '-' + (t / 10).toFixed(1), t, -1, startH, endH, zLower, zUpper, z0);
+                // Positive rows hold hundredths 10t .. 10t+9.
+                const posFirst = Math.max(0, Math.ceil((startH - 9) / 10)), posLast = Math.floor(endH / 10);
+                for (let t = posFirst; t <= posLast; t++)
+                    appendTableRow(tbody, (t / 10).toFixed(1), t, 1, startH, endH, zLower, zUpper, z0);
             }
 
             // --- Main update ---
@@ -707,7 +751,7 @@
                     `α = ${alpha.toFixed(4)} &nbsp;·&nbsp; p = ${pStr} (${tailLabel}) &nbsp;·&nbsp; ` +
                     `<span class="badge ${reject ? 'rej' : 'acc'}">${reject ? 'Reject H₀' : 'Fail to reject H₀'}</span>`;
                 document.getElementById('output-scaled').innerHTML =
-                    `<span class="badge ci">CI width: ${(upperPercent - lowerPercent).toFixed(2)}%</span>`;
+                    `<span class="badge ci">${fmtLevel(upperPercent - lowerPercent)}% CI: [${fmtBound(xLower)}, ${fmtBound(xUpper)}]</span>`;
 
                 document.getElementById('walkthrough').innerHTML = buildWalkthrough({
                     mean, sd: stddev, x0, zStat, alpha, pStr, reject, tails, tailLabel, ciWidth: upperPercent - lowerPercent

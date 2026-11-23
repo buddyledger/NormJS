@@ -117,6 +117,13 @@
         .walk { font-size: 0.9rem; }
         .walk p { margin: 6px 0; }
         .walk strong { color: var(--text); }
+        .explain { margin: 10px 0 0; color: var(--muted); font-size: 0.85rem; }
+        .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; color: var(--muted); font-size: 0.78rem; }
+        .legend .key { white-space: nowrap; }
+        .legend i { display: inline-block; width: 18px; border-top: 2px solid; vertical-align: middle; margin-right: 5px; }
+        .legend i.fill { height: 10px; border: 0; border-radius: 2px; }
+        .legend i.dot { width: 9px; height: 9px; border: 0; border-radius: 50%; }
+        .legend .drag { flex-basis: 100%; }
     </style>
 </head>
 <body>
@@ -202,6 +209,8 @@
                 </div>
                 <div id="plot-standard"></div>
                 <div class="output" id="output-standard"></div>
+                <p class="explain" id="explain-standard"></p>
+                <div class="legend" id="legend-standard"></div>
                 <details class="collapsible" open>
                     <summary>Equations</summary>
                     <div class="equation" id="equation-standard"></div>
@@ -214,6 +223,12 @@
                 </div>
                 <div id="plot-scaled"></div>
                 <div class="output" id="output-scaled"></div>
+                <p class="explain" id="explain-curves">The <strong>red curve</strong> is centred on the null value X₀: it shows where sample means
+                    would fall if H₀ were true, and its shaded tails are the rejection region. The <strong>blue curve</strong> is centred on the
+                    observed mean m: its shaded middle is the confidence interval. They have the same width because they share one SE, which is
+                    why the test and the interval always agree.</p>
+                <p class="explain" id="explain-scaled"></p>
+                <div class="legend" id="legend-scaled"></div>
                 <details class="collapsible" open>
                     <summary>Equations</summary>
                     <div class="equation" id="equation-scaled"></div>
@@ -259,13 +274,19 @@
                 <h3>Sampling Simulator</h3>
                 <button type="button" class="btn btn-sm" id="png-sampling">PNG</button>
             </div>
-            <p class="hint">Draw random observations from the scaled normal N(m, SE) and watch the histogram approach the theoretical curve.</p>
+            <p class="hint">Draw random values from the scaled normal N(m, SE), one at a time or in bulk. Each draw lands in a column;
+                with only a few draws the pile looks nothing like the curve, and with many it settles onto it.</p>
             <div class="sampling-controls">
-                <button type="button" class="btn" id="draw-samples">Draw samples</button>
+                <button type="button" class="btn" data-draw="1">Draw 1</button>
+                <button type="button" class="btn" data-draw="10">Draw 10</button>
+                <button type="button" class="btn" data-draw="100">Draw 100</button>
+                <button type="button" class="btn" data-draw="1000">Draw 1000</button>
                 <button type="button" class="btn" id="clear-samples">Clear</button>
-                <span class="output" id="sampling-stats"></span>
             </div>
             <div id="plot-sampling"></div>
+            <div class="output" id="sampling-stats" aria-live="polite"></div>
+            <p class="explain" id="sampling-note"></p>
+            <div class="legend" id="legend-sampling"></div>
         </div>
     </div>
 
@@ -305,7 +326,13 @@
             const fmtLevel = pct => String(parseFloat(pct.toFixed(2)));
             const fmtBound = x => Number.isFinite(x) ? x.toFixed(2) : (x < 0 ? '−∞' : '∞');
 
-            let samples = [], drawTimer = null, prevMean = null, prevSE = null;
+            // Sampling simulator state. `incoming` is a draw shown above the plot before it lands;
+            // `lastState` is the last valid set of values, shared with the plots.
+            const BINS = 40, DOT_LIMIT = 400, MAX_SAMPLES = 20000;
+            let samples = [], drawTimer = null, incoming = null, clearedNote = false, lastState = null,
+                prevMean = null, prevSE = null;
+            // Trim a number for prose: 2.30 -> "2.3", 2.00 -> "2".
+            const fmtNum = x => String(parseFloat(x.toFixed(2)));
             function randNormal(m, sd) {
                 let u = 0, v = 0;
                 while (u === 0) u = Math.random();
@@ -328,9 +355,11 @@
                 const dark = document.documentElement.dataset.theme === 'dark';
                 return dark
                     ? { paper: '#1e293b', plot: '#1e293b', font: '#e2e8f0', grid: '#334155', curve: '#60a5fa',
-                        ciFill: 'rgba(45,212,191,0.18)', ciLine: '#2dd4bf', rejFill: 'rgba(248,113,113,0.20)', nullLine: '#f87171', statLine: '#c084fc' }
+                        ciFill: 'rgba(45,212,191,0.18)', ciLine: '#2dd4bf', rejFill: 'rgba(248,113,113,0.20)', nullLine: '#f87171', statLine: '#c084fc',
+                        refLine: '#94a3b8', outside: '#64748b', latest: '#fbbf24' }
                     : { paper: '#ffffff', plot: '#ffffff', font: '#1e293b', grid: '#e2e8f0', curve: '#2563eb',
-                        ciFill: 'rgba(13,148,136,0.18)', ciLine: '#0d9488', rejFill: 'rgba(220,38,38,0.15)', nullLine: '#dc2626', statLine: '#7c3aed' };
+                        ciFill: 'rgba(13,148,136,0.18)', ciLine: '#0d9488', rejFill: 'rgba(220,38,38,0.15)', nullLine: '#dc2626', statLine: '#7c3aed',
+                        refLine: '#94a3b8', outside: '#94a3b8', latest: '#d97706' };
             }
 
             // --- Debounced update ---
@@ -385,7 +414,8 @@
             });
 
             // --- Sampling, export buttons ---
-            document.getElementById('draw-samples').addEventListener('click', drawSamples);
+            document.querySelectorAll('[data-draw]').forEach(b =>
+                b.addEventListener('click', () => drawSamples(parseInt(b.dataset.draw, 10))));
             document.getElementById('clear-samples').addEventListener('click', clearSamples);
             document.getElementById('csv-table').addEventListener('click', exportCSV);
             const pngOpts = id => ({ format: 'png', filename: id, width: 1000, height: 600, scale: 2 });
@@ -427,127 +457,279 @@
             function vLine(x, color, dash) {
                 return { type: 'line', xref: 'x', x0: x, x1: x, yref: 'paper', y0: 0, y1: 1, line: { color: color, width: 2, dash: dash } };
             }
-            function shadeTrace(a, b, m, sd, fill) {
+            function shadeTrace(a, b, m, sd, fill, name) {
                 if (!(b > a)) return null;
                 const xs = [], ys = [], step = (b - a) / 200;
                 for (let x = a; x <= b; x += step) { xs.push(x); ys.push(jStat.normal.pdf(x, m, sd)); }
                 xs.push(b); ys.push(jStat.normal.pdf(b, m, sd));
-                return { x: [...xs, b, a], y: [...ys, 0, 0], fill: 'toself', type: 'scatter', mode: 'lines',
+                return { x: [...xs, b, a], y: [...ys, 0, 0], fill: 'toself', type: 'scatter', mode: 'lines', name: name,
                          fillcolor: fill, line: { color: 'transparent' }, hoverinfo: 'skip', showlegend: false };
             }
 
+            // Both plots show the same two curves, each SE wide:
+            //   null curve     - centred on the null value X0: where sample means would fall if
+            //                    H0 were true. Its tails are the rejection region.
+            //   interval curve - centred on the observed mean m. Its shaded middle is the
+            //                    confidence interval.
+            // The scaled plot is in original units. The standard plot is the same picture after
+            // Z = (X - X0)/SE, so the null curve is N(0, 1), the null value is at 0 and the
+            // observed mean is at the test statistic z.
+            // Shape order in both plots (the drag handler relies on it):
+            //   [interval lower, interval upper, null value, observed mean / z].
+            const legendKey = (cls, style, label) => `<span class="key"><i class="${cls}" style="${style}"></i>${label}</span>`;
+            const markerLabel = (tc, x, y, text, color) => ({ x: x, y: y, yref: 'paper', text: text, showarrow: false,
+                font: { size: 11, color: color }, bgcolor: tc.paper, borderpad: 2, xanchor: 'center', yanchor: 'middle' });
+
             function plotStandardNormal(s) {
-                const tc = themeColors();
-                const xs = [], ys = [], cd = [];
-                for (let i = 0; i <= 800; i++) { const x = -4 + i * 8 / 800; xs.push(x); ys.push(jStat.normal.pdf(x, 0, 1)); cd.push(jStat.normal.cdf(x, 0, 1)); }
-                const curve = { x: xs, y: ys, customdata: cd, type: 'scatter', mode: 'lines', line: { color: tc.curve, width: 2 },
-                                hovertemplate: 'z = %{x:.2f}<br>pdf = %{y:.4f}<br>cdf = %{customdata:.4f}<extra></extra>' };
-                const data = [curve];
-                let a = Number.isFinite(s.zLower) ? s.zLower : -4, b = Number.isFinite(s.zUpper) ? s.zUpper : 4;
-                if (s.lowerPct <= 0) a = -4;
-                if (s.upperPct >= 100) b = 4;
-                const ci = shadeTrace(a, b, 0, 1, tc.ciFill); if (ci) data.push(ci);
-                s.rejections.forEach(([ra, rb]) => { const t = shadeTrace(ra, rb, 0, 1, tc.rejFill); if (t) data.push(t); });
+                const tc = themeColors(), z = s.zStat;
+                // Always wide enough for both curves.
+                const minZ = Math.min(-4, z - 4), maxZ = Math.max(4, z + 4);
+                const xs = [], nullY = [], cd = [], ivY = [];
+                for (let i = 0; i <= 800; i++) {
+                    const x = minZ + i * (maxZ - minZ) / 800;
+                    xs.push(x); nullY.push(jStat.normal.pdf(x, 0, 1)); cd.push(jStat.normal.cdf(x, 0, 1)); ivY.push(jStat.normal.pdf(x, z, 1));
+                }
+                const data = [{ x: xs, y: nullY, customdata: cd, type: 'scatter', mode: 'lines', name: 'null', line: { color: tc.nullLine, width: 2 },
+                                hovertemplate: 'z = %{x:.2f}<br>pdf = %{y:.4f}<br>cdf = %{customdata:.4f}<extra></extra>' }];
+                s.rejections.forEach(([ra, rb]) => { const t = shadeTrace(ra, rb, 0, 1, tc.rejFill, 'rejection'); if (t) data.push(t); });
+                data.push({ x: xs, y: ivY, type: 'scatter', mode: 'lines', name: 'interval-curve', line: { color: tc.curve, width: 2 }, hoverinfo: 'skip' });
+                // The interval in z units: the statistic plus the percentile z-scores.
+                const lo = (s.lowerPct > 0 && Number.isFinite(s.zLower)) ? z + s.zLower : minZ;
+                const hi = (s.upperPct < 100 && Number.isFinite(s.zUpper)) ? z + s.zUpper : maxZ;
+                const ci = shadeTrace(lo, hi, z, 1, tc.ciFill, 'interval'); if (ci) data.push(ci);
                 const shapes = [
-                    vLine(clamp(Number.isFinite(s.zLower) ? s.zLower : -4, -4, 4), tc.ciLine, 'dot'),
-                    vLine(clamp(Number.isFinite(s.zUpper) ? s.zUpper : 4, -4, 4), tc.ciLine, 'dot'),
-                    vLine(clamp(s.z0, -4, 4), tc.nullLine, 'dashdot'),
-                    // The test statistic z = -Z0 is what the rejection regions are judged against.
-                    vLine(clamp(s.zStat, -4, 4), tc.statLine, 'solid')
+                    vLine(lo, tc.ciLine, 'dot'),
+                    vLine(hi, tc.ciLine, 'dot'),
+                    vLine(0, tc.nullLine, 'dashdot'),
+                    // The test statistic: reject H0 when this line is in a rejection region.
+                    vLine(z, tc.statLine, 'solid')
                 ];
-                const annotations = [];
-                const markerLabel = (x, y, text, color) => ({ x: clamp(x, -3.4, 3.4), y: y, yref: 'paper', text: text, showarrow: false,
-                    font: { size: 11, color: color }, bgcolor: tc.paper, borderpad: 2, xanchor: 'center', yanchor: 'middle' });
-                annotations.push(markerLabel(s.zStat, 0.93, `z = ${s.zStat.toFixed(2)}`, tc.statLine));
-                annotations.push(markerLabel(s.z0, 0.80, `Z₀ = ${s.z0.toFixed(2)}`, tc.nullLine));
-                if (Number.isFinite(s.zLower)) annotations.push({ x: clamp(s.zLower, -4, 4), y: 1.02, yref: 'paper', text: `z* = ${s.zLower.toFixed(2)}`, showarrow: false, font: { size: 11, color: tc.ciLine }, xanchor: 'center', yanchor: 'bottom' });
-                if (Number.isFinite(s.zUpper)) annotations.push({ x: clamp(s.zUpper, -4, 4), y: 1.02, yref: 'paper', text: `z* = ${s.zUpper.toFixed(2)}`, showarrow: false, font: { size: 11, color: tc.ciLine }, xanchor: 'center', yanchor: 'bottom' });
+                const annotations = [
+                    markerLabel(tc, z, 0.93, `z = ${z.toFixed(2)}`, tc.statLine),
+                    markerLabel(tc, 0, 0.80, 'X₀ → 0', tc.nullLine)
+                ];
                 s.rejections.forEach(([ra, rb]) => {
-                    const lo = Math.max(ra, -4), hi = Math.min(rb, 4);
-                    if (hi > lo) {
-                        const area = jStat.normal.cdf(hi, 0, 1) - jStat.normal.cdf(lo, 0, 1);
-                        if (area > 0.0005) annotations.push({ x: clamp((lo + hi) / 2, -3.7, 3.7), y: 0.08, yref: 'paper', text: area.toFixed(3), showarrow: false, font: { size: 11, color: tc.nullLine } });
-                    }
+                    // The critical value is the inner edge of the region.
+                    const edge = ra <= -4 ? rb : ra;
+                    if (Math.abs(edge) < 4) annotations.push({ x: edge, y: 1.02, yref: 'paper', text: `z* = ${edge.toFixed(2)}`, showarrow: false,
+                        font: { size: 11, color: tc.nullLine }, xanchor: 'center', yanchor: 'bottom' });
+                    const area = jStat.normal.cdf(rb, 0, 1) - jStat.normal.cdf(ra, 0, 1);
+                    if (rb > ra && area > 0.0005) annotations.push({ x: clamp((ra + rb) / 2, -3.7, 3.7), y: 0.08, yref: 'paper', text: area.toFixed(3),
+                        showarrow: false, font: { size: 11, color: tc.nullLine } });
                 });
                 const layout = {
-                    xaxis: { title: 'Z', range: [-4, 4], gridcolor: tc.grid, zerolinecolor: tc.grid },
+                    xaxis: { title: 'Z = (X − X₀) / SE', range: [minZ, maxZ], gridcolor: tc.grid, zerolinecolor: tc.grid },
                     yaxis: { title: 'Probability Density', gridcolor: tc.grid, zerolinecolor: tc.grid },
                     showlegend: false, height: 300, autosize: true, margin: { t: 24, r: 16, b: 44, l: 56 },
                     paper_bgcolor: tc.paper, plot_bgcolor: tc.plot, font: { color: tc.font }, shapes: shapes, annotations: annotations
                 };
                 Plotly.react('plot-standard', data, layout, { responsive: true, displayModeBar: false, edits: { shapePosition: true } });
+
+                document.getElementById('explain-standard').textContent = z === 0
+                    ? 'The observed mean equals the null value, so the two curves coincide and z = 0. Move the mean or X₀ and the blue curve slides away from the red one.'
+                    : 'This is the scaled plot after standardizing with Z = (X − X₀)/SE: the null value moves to 0 and one unit is one standard error. ' +
+                      `The observed mean lands at z = ${z.toFixed(2)}, that is ${fmtNum(Math.abs(z))} standard errors ${z > 0 ? 'above' : 'below'} the null value. ` +
+                      (s.reject ? 'That is inside the red shading, so H₀ is rejected.' : 'That is outside the red shading, so H₀ is not rejected.');
+                document.getElementById('legend-standard').innerHTML =
+                    legendKey('', `border-color:${tc.nullLine}`, 'null curve N(0, 1)') +
+                    legendKey('fill', `background:${tc.rejFill}`, 'rejection region (area α)') +
+                    legendKey('', `border-color:${tc.nullLine};border-top-style:dashed`, 'null value') +
+                    legendKey('', `border-color:${tc.statLine}`, 'test statistic z') +
+                    legendKey('', `border-color:${tc.curve}`, 'interval curve') +
+                    legendKey('fill', `background:${tc.ciFill}`, 'interval') +
+                    legendKey('', `border-color:${tc.ciLine};border-top-style:dotted`, 'interval bounds') +
+                    '<span class="drag">Reject H₀ when the purple line is in the red shading. Drag any vertical line to change its value.</span>';
+            }
+
+            // X range for the scaled plot: wide enough for both curves. When the standard normal
+            // is close enough in position and scale to read on the same axis, widen the range to
+            // take it in, so changes to the mean and SE show against a fixed landmark.
+            function scaledAxis(m, sd, x0) {
+                const ownMin = Math.min(m, x0) - 4 * sd, ownMax = Math.max(m, x0) + 4 * sd;
+                const lo = Math.min(ownMin, -4), hi = Math.max(ownMax, 4);
+                // A scaled curve (8·SE wide) and the reference (8 wide) must each keep a third of the axis.
+                const showRef = (hi - lo) <= 3 * 8 * sd && (hi - lo) <= 3 * 8;
+                return showRef ? { min: lo, max: hi, showRef } : { min: ownMin, max: ownMax, showRef };
             }
 
             function plotScaledNormal(s) {
                 const tc = themeColors();
-                const m = s.mean, sd = s.stddev, minX = m - 4 * sd, maxX = m + 4 * sd;
-                const xs = [], ys = [], cd = [];
-                for (let i = 0; i <= 800; i++) { const x = minX + i * (maxX - minX) / 800; xs.push(x); ys.push(jStat.normal.pdf(x, m, sd)); cd.push(jStat.normal.cdf(x, m, sd)); }
-                const curve = { x: xs, y: ys, customdata: cd, type: 'scatter', mode: 'lines', line: { color: tc.curve, width: 2 },
-                                hovertemplate: 'x = %{x:.2f}<br>pdf = %{y:.4f}<br>cdf = %{customdata:.4f}<extra></extra>' };
-                const data = [curve];
-                let a = Number.isFinite(s.xLower) ? s.xLower : minX, b = Number.isFinite(s.xUpper) ? s.xUpper : maxX;
-                if (s.lowerPct <= 0) a = minX;
-                if (s.upperPct >= 100) b = maxX;
-                const ci = shadeTrace(a, b, m, sd, tc.ciFill); if (ci) data.push(ci);
+                const m = s.mean, sd = s.stddev, x0 = s.x0, ax = scaledAxis(m, sd, x0), minX = ax.min, maxX = ax.max;
+                const xs = [], ys = [], cd = [], nullY = [], refY = [];
+                for (let i = 0; i <= 800; i++) {
+                    const x = minX + i * (maxX - minX) / 800;
+                    xs.push(x); ys.push(jStat.normal.pdf(x, m, sd)); cd.push(jStat.normal.cdf(x, m, sd));
+                    nullY.push(jStat.normal.pdf(x, x0, sd)); refY.push(jStat.normal.pdf(x, 0, 1));
+                }
+                const data = [];
+                // Drawn first so it sits behind everything else.
+                if (ax.showRef) data.push({ x: xs, y: refY, type: 'scatter', mode: 'lines', name: 'reference',
+                    line: { color: tc.refLine, width: 1.5, dash: 'dash' }, hoverinfo: 'skip' });
+                data.push({ x: xs, y: nullY, type: 'scatter', mode: 'lines', name: 'null', line: { color: tc.nullLine, width: 2 }, hoverinfo: 'skip' });
+                // The rejection regions, converted from z back to original units.
+                s.rejections.forEach(([ra, rb]) => { const t = shadeTrace(x0 + ra * sd, x0 + rb * sd, x0, sd, tc.rejFill, 'rejection'); if (t) data.push(t); });
+                data.push({ x: xs, y: ys, customdata: cd, type: 'scatter', mode: 'lines', name: 'scaled', line: { color: tc.curve, width: 2 },
+                            hovertemplate: 'x = %{x:.2f}<br>pdf = %{y:.4f}<br>cdf = %{customdata:.4f}<extra></extra>' });
+                const lo = (s.lowerPct > 0 && Number.isFinite(s.xLower)) ? s.xLower : minX;
+                const hi = (s.upperPct < 100 && Number.isFinite(s.xUpper)) ? s.xUpper : maxX;
+                const ci = shadeTrace(lo, hi, m, sd, tc.ciFill, 'interval'); if (ci) data.push(ci);
                 const shapes = [
-                    vLine(clamp(Number.isFinite(s.xLower) ? s.xLower : minX, minX, maxX), tc.ciLine, 'dot'),
-                    vLine(clamp(Number.isFinite(s.xUpper) ? s.xUpper : maxX, minX, maxX), tc.ciLine, 'dot'),
-                    vLine(clamp(s.x0, minX, maxX), tc.nullLine, 'dashdot')
+                    vLine(lo, tc.ciLine, 'dot'),
+                    vLine(hi, tc.ciLine, 'dot'),
+                    vLine(x0, tc.nullLine, 'dashdot'),
+                    vLine(m, tc.statLine, 'solid')
+                ];
+                const annotations = [
+                    markerLabel(tc, m, 0.93, `m = ${m.toFixed(2)}`, tc.statLine),
+                    markerLabel(tc, x0, 0.80, `X₀ = ${x0.toFixed(2)}`, tc.nullLine)
                 ];
                 const layout = {
                     xaxis: { title: 'X', range: [minX, maxX], gridcolor: tc.grid, zerolinecolor: tc.grid },
                     yaxis: { title: 'Probability Density', gridcolor: tc.grid, zerolinecolor: tc.grid },
-                    showlegend: false, height: 300, autosize: true, margin: { t: 10, r: 16, b: 44, l: 56 },
-                    paper_bgcolor: tc.paper, plot_bgcolor: tc.plot, font: { color: tc.font }, shapes: shapes
+                    showlegend: false, height: 300, autosize: true, margin: { t: 24, r: 16, b: 44, l: 56 },
+                    paper_bgcolor: tc.paper, plot_bgcolor: tc.plot, font: { color: tc.font }, shapes: shapes, annotations: annotations
                 };
                 Plotly.react('plot-scaled', data, layout, { responsive: true, displayModeBar: false, edits: { shapePosition: true } });
+
+                // Say in words how the interval curve differs from the standard normal.
+                let text;
+                if (m === 0 && sd === 1) {
+                    text = 'With m = 0 and SE = 1 the blue curve is the standard normal itself, so it sits exactly on the grey reference curve. ' +
+                           'Change the mean or SE and watch it move away.';
+                } else {
+                    const shift = m === 0 ? 'centred in the same place' : `shifted ${m > 0 ? 'right' : 'left'} by ${fmtNum(Math.abs(m))}`;
+                    const shape = sd === 1 ? 'the same shape'
+                        : `${fmtNum(sd)}× as wide and ${fmtNum(1 / sd)}× as tall (${sd > 1 ? 'more' : 'less'} uncertainty spreads the same total area ${sd > 1 ? 'out' : 'into a narrower peak'})`;
+                    text = `Compared with the standard normal, the blue curve is ${shift} and is ${shape}. ` +
+                           'The mean moves the curve; the SE stretches it.';
+                    if (!ax.showRef) text += ' The standard normal is not drawn here: at these values the curves would not all be readable on one axis.';
+                }
+                document.getElementById('explain-scaled').textContent = text;
+                document.getElementById('legend-scaled').innerHTML =
+                    legendKey('', `border-color:${tc.nullLine}`, 'null curve N(X₀, SE)') +
+                    legendKey('fill', `background:${tc.rejFill}`, 'rejection region') +
+                    legendKey('', `border-color:${tc.nullLine};border-top-style:dashed`, 'null value X₀') +
+                    legendKey('', `border-color:${tc.statLine}`, 'observed mean m') +
+                    legendKey('', `border-color:${tc.curve}`, 'interval curve N(m, SE)') +
+                    legendKey('fill', `background:${tc.ciFill}`, 'interval') +
+                    legendKey('', `border-color:${tc.ciLine};border-top-style:dotted`, 'interval bounds') +
+                    (ax.showRef ? legendKey('', `border-color:${tc.refLine};border-top-style:dashed`, 'standard normal N(0, 1)') : '') +
+                    '<span class="drag">Reject H₀ when the purple line is in the red shading. Drag any vertical line to change its value.</span>';
             }
 
             // --- Sampling simulator ---
+            // Each draw is one dot, stacked in the column (bin) it lands in, so the picture is
+            // a histogram the student can count. Past DOT_LIMIT draws the stacks are drawn as
+            // bars instead. The y axis is a count; the curve is the expected count per column.
             function plotSampling() {
+                const s = lastState; if (!s) return;
                 const tc = themeColors();
-                const m = parseFloat(meanInput.value), sd = parseFloat(stddevInput.value);
-                if (!Number.isFinite(m) || !Number.isFinite(sd) || sd <= 0) return;
-                const minX = m - 4 * sd, maxX = m + 4 * sd;
+                const m = s.mean, sd = s.stddev, minX = m - 4 * sd, maxX = m + 4 * sd, w = (maxX - minX) / BINS;
+                const binOf = x => clamp(Math.floor((x - minX) / w), 0, BINS - 1);
+                const centre = b => minX + (b + 0.5) * w;
+                const n = samples.length, useDots = n <= DOT_LIMIT;
+                const counts = new Array(BINS).fill(0);
+                const dotsIn = { x: [], y: [] }, dotsOut = { x: [], y: [] };
+                let inside = 0, last = null;
+                samples.forEach(x => {
+                    const b = binOf(x), isIn = x >= s.xLower && x <= s.xUpper;
+                    if (isIn) inside++;
+                    last = { x: centre(b), y: counts[b] + 0.5 };
+                    if (useDots) { const d = isIn ? dotsIn : dotsOut; d.x.push(last.x); d.y.push(last.y); }
+                    counts[b]++;
+                });
+                const peak = jStat.normal.pdf(m, m, sd);
+                // Before the first draw there are no counts, so show the curve's shape only.
+                const scale = n ? n * w : 6 / peak;
+                const yMax = Math.max(8, Math.max(...counts) + 1.5, n * w * peak * 1.15);
                 const xs = [], ys = [];
-                for (let i = 0; i <= 200; i++) { const x = minX + i * (maxX - minX) / 200; xs.push(x); ys.push(jStat.normal.pdf(x, m, sd)); }
+                for (let i = 0; i <= 200; i++) { const x = minX + i * (maxX - minX) / 200; xs.push(x); ys.push(jStat.normal.pdf(x, m, sd) * scale); }
+
+                // Dot diameter in pixels: as large as fits one column and one row.
+                const gd = document.getElementById('plot-sampling');
+                const plotW = Math.max(100, (gd.clientWidth || 800) - 72), plotH = 280 - 54;
+                const size = clamp(Math.min(plotW / BINS, plotH / yMax) * 0.85, 2, 11);
+
                 const data = [];
-                if (samples.length) {
-                    data.push({ x: samples, type: 'histogram', histnorm: 'probability density',
-                        marker: { color: tc.curve, opacity: 0.45 }, xbins: { start: minX, end: maxX, size: (maxX - minX) / 30 },
-                        hovertemplate: 'density = %{y:.4f}<extra></extra>' });
+                if (!useDots) {
+                    data.push({ x: counts.map((_, b) => centre(b)), y: counts, type: 'bar', name: 'bars', width: w * 0.96,
+                        marker: { color: tc.curve, opacity: 0.45 }, hovertemplate: '%{y} draws<extra></extra>' });
+                } else {
+                    const dots = (d, name, color) => ({ x: d.x, y: d.y, type: 'scatter', mode: 'markers', name: name,
+                        marker: { color: color, size: size }, hoverinfo: 'skip' });
+                    data.push(dots(dotsIn, 'dots', tc.curve), dots(dotsOut, 'dots-outside', tc.outside));
+                    // Ring the most recent draw so a single new dot is easy to find.
+                    if (last) data.push({ x: [last.x], y: [last.y], type: 'scatter', mode: 'markers', name: 'latest', hoverinfo: 'skip',
+                        marker: { color: 'rgba(0,0,0,0)', size: size + 4, line: { color: tc.latest, width: 2 } } });
                 }
-                data.push({ x: xs, y: ys, type: 'scatter', mode: 'lines', line: { color: tc.nullLine, width: 2 }, hoverinfo: 'skip' });
+                if (incoming !== null) data.push({ x: [centre(binOf(incoming))], y: [yMax * 0.95], type: 'scatter', mode: 'markers',
+                    name: 'incoming', hoverinfo: 'skip', marker: { color: tc.latest, size: Math.max(size, 8) } });
+                data.push({ x: xs, y: ys, type: 'scatter', mode: 'lines', name: 'expected', line: { color: tc.font, width: 1.5 }, hoverinfo: 'skip' });
+
+                const shapes = [s.xLower, s.xUpper].filter(Number.isFinite).map(x => vLine(clamp(x, minX, maxX), tc.ciLine, 'dot'));
                 const layout = {
-                    xaxis: { title: 'X', range: [minX, maxX], gridcolor: tc.grid, zerolinecolor: tc.grid },
-                    yaxis: { title: 'Density', gridcolor: tc.grid, zerolinecolor: tc.grid },
-                    showlegend: false, height: 280, autosize: true, margin: { t: 10, r: 16, b: 44, l: 56 }, bargap: 0.02,
-                    paper_bgcolor: tc.paper, plot_bgcolor: tc.plot, font: { color: tc.font }
+                    xaxis: { title: 'X', range: [minX, maxX], gridcolor: tc.grid, zerolinecolor: tc.grid, fixedrange: true },
+                    yaxis: { title: n ? 'Draws per column' : '', range: [0, yMax], showticklabels: n > 0, gridcolor: tc.grid, zerolinecolor: tc.grid, fixedrange: true },
+                    showlegend: false, height: 280, autosize: true, margin: { t: 10, r: 16, b: 44, l: 56 },
+                    paper_bgcolor: tc.paper, plot_bgcolor: tc.plot, font: { color: tc.font }, shapes: shapes
                 };
                 Plotly.react('plot-sampling', data, layout, { responsive: true, displayModeBar: false });
+
+                const level = fmtLevel(s.upperPct - s.lowerPct);
                 const statsEl = document.getElementById('sampling-stats');
-                if (samples.length) {
-                    statsEl.textContent = `n = ${samples.length} · sample mean = ${jStat.mean(samples).toFixed(3)} · sample SD = ${jStat.stdev(samples, true).toFixed(3)} (theory: ${m.toFixed(2)}, ${sd.toFixed(2)})`;
+                if (!n) {
+                    statsEl.textContent = clearedNote
+                        ? 'The draws were cleared because the mean or SE changed. Draw again to sample from the new curve.'
+                        : 'No draws yet. Start with "Draw 1" and watch where each value lands.';
                 } else {
-                    statsEl.textContent = 'No samples yet — click "Draw samples".';
+                    const parts = [`n = ${n}`, `mean of draws = ${jStat.mean(samples).toFixed(3)} (curve: ${m.toFixed(2)})`];
+                    if (n > 1) parts.push(`SD of draws = ${jStat.stdev(samples, true).toFixed(3)} (SE: ${sd.toFixed(2)})`);
+                    parts.push(`${inside} of ${n} (${(100 * inside / n).toFixed(1)}%) inside the ${level}% interval`);
+                    if (n >= MAX_SAMPLES) parts.push('limit reached, clear to draw again');
+                    statsEl.textContent = parts.join(' · ');
                 }
+                document.getElementById('sampling-note').textContent = useDots
+                    ? `Each dot is one draw. About ${level}% of draws should land between the dotted lines, but a small sample can miss that by a lot: ` +
+                      'compare the percentage after 10 draws, 100 and 1000. The line shows how many draws each column should hold on average.'
+                    : `Past ${DOT_LIMIT} draws the dots are replaced by bars. A histogram is the same stacks of draws, counted instead of drawn one by one. ` +
+                      'With this many draws the bars follow the line closely, and the share inside the interval settles near ' + level + '%.';
+                document.getElementById('legend-sampling').innerHTML =
+                    (useDots ? legendKey('dot', `background:${tc.curve}`, 'draw inside the interval') + legendKey('dot', `background:${tc.outside}`, 'draw outside it') +
+                               legendKey('dot', `background:transparent;box-shadow:0 0 0 2px ${tc.latest}`, 'latest draw')
+                             : legendKey('fill', `background:${tc.curve};opacity:.45`, 'draws per column')) +
+                    legendKey('', `border-color:${tc.font}`, 'expected from N(m, SE)') +
+                    legendKey('', `border-color:${tc.ciLine};border-top-style:dotted`, 'interval bounds');
             }
-            function drawSamples() {
-                if (drawTimer) return;
-                const m = parseFloat(meanInput.value), sd = parseFloat(stddevInput.value);
-                if (!Number.isFinite(m) || !Number.isFinite(sd) || sd <= 0) return;
-                let added = 0; const target = 300, batch = 15;
-                drawTimer = setInterval(() => {
-                    for (let i = 0; i < batch; i++) samples.push(randNormal(m, sd));
-                    added += batch;
+            // Add `count` draws. Small runs arrive one at a time, each shown above the plot before
+            // it drops into its column; large runs arrive in batches over about a second.
+            function drawSamples(count) {
+                if (drawTimer || !lastState) return;
+                count = Math.min(count, MAX_SAMPLES - samples.length);
+                if (count <= 0) return;
+                clearedNote = false;
+                const m = lastState.mean, sd = lastState.stddev;
+                if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                    for (let i = 0; i < count; i++) samples.push(randNormal(m, sd));
                     plotSampling();
-                    if (added >= target) { clearInterval(drawTimer); drawTimer = null; }
-                }, 40);
+                    return;
+                }
+                const oneByOne = count <= 10, perTick = Math.ceil(count / 25);
+                let left = count;
+                drawTimer = setInterval(() => {
+                    if (oneByOne && incoming === null) { incoming = randNormal(m, sd); plotSampling(); return; }
+                    if (oneByOne) { samples.push(incoming); incoming = null; left--; }
+                    else { const k = Math.min(perTick, left); for (let i = 0; i < k; i++) samples.push(randNormal(m, sd)); left -= k; }
+                    if (left <= 0) { clearInterval(drawTimer); drawTimer = null; }
+                    plotSampling();
+                }, oneByOne ? 110 : 50);
+            }
+            function stopDrawing() {
+                if (drawTimer) { clearInterval(drawTimer); drawTimer = null; }
+                incoming = null;
             }
             function clearSamples() {
-                if (drawTimer) { clearInterval(drawTimer); drawTimer = null; }
-                samples = [];
+                stopDrawing();
+                samples = []; clearedNote = false;
                 plotSampling();
             }
 
@@ -555,14 +737,24 @@
             function buildWalkthrough(o) {
                 const h1 = o.tails === 'two' ? 'm ≠ X₀' : (o.tails === 'left' ? 'm < X₀' : 'm > X₀');
                 const concl = o.reject
-                    ? `Since p (${o.pStr}) < α (${o.alpha.toFixed(4)}), <strong>reject H₀</strong>.`
-                    : `Since p (${o.pStr}) ≥ α (${o.alpha.toFixed(4)}), <strong>fail to reject H₀</strong>.`;
+                    ? `Since p (${o.pStr}) < α (${o.alpha.toFixed(4)}), <strong>reject H₀</strong>. A result this unusual under H₀ is taken as evidence against it.`
+                    : `Since p (${o.pStr}) ≥ α (${o.alpha.toFixed(4)}), <strong>fail to reject H₀</strong>. This does not show that H₀ is true, only that the data are compatible with it.`;
+                // The p-value in plain words.
+                const extreme = o.tails === 'two' ? 'at least this far from zero, in either direction,' : (o.tails === 'left' ? 'this low or lower' : 'this high or higher');
+                const share = o.p < 0.0001 ? 'fewer than 1 in 10,000 samples' : `about ${(o.p * 100).toFixed(o.p < 0.01 ? 2 : 1)}% of samples`;
+                const meaning = `If H₀ were true, a z statistic ${extreme} would turn up in ${share}.`;
+                // A central interval and a two-tailed test at the same level always agree.
+                const link = (o.tails === 'two' && o.central)
+                    ? `<p><strong>Same answer from the interval.</strong> X₀ = ${o.x0.toFixed(2)} lies ${o.reject ? 'outside' : 'inside'} the ${fmtLevel(o.ciWidth)}% interval ` +
+                      `[${fmtBound(o.xLower)}, ${fmtBound(o.xUpper)}]. A value outside the interval is rejected by the two-tailed test at α = ${o.alpha.toFixed(4)}, and a value inside it is not.</p>`
+                    : '';
                 return `
                     <p><strong>Hypotheses.</strong> H₀: m = X₀ = ${o.x0.toFixed(2)} &nbsp;vs&nbsp; H₁: ${h1}.</p>
-                    <p><strong>Test statistic.</strong> z = (m − X₀) / SE = (${o.mean.toFixed(2)} − ${o.x0.toFixed(2)}) / ${o.sd.toFixed(2)} = <strong>${o.zStat.toFixed(4)}</strong>.</p>
-                    <p><strong>Significance level.</strong> α = ${o.alpha.toFixed(4)}, taken from the ${o.ciWidth.toFixed(1)}% confidence interval (${o.tailLabel}).</p>
-                    <p><strong>p-value.</strong> ${o.pStr}.</p>
-                    <p><strong>Decision.</strong> ${concl}</p>`;
+                    <p><strong>Test statistic.</strong> z = (m − X₀) / SE = (${o.mean.toFixed(2)} − ${o.x0.toFixed(2)}) / ${o.sd.toFixed(2)} = <strong>${o.zStat.toFixed(4)}</strong>. The observed mean is ${fmtNum(Math.abs(o.zStat))} standard errors ${o.zStat === 0 ? 'from' : (o.zStat > 0 ? 'above' : 'below')} the null value.</p>
+                    <p><strong>Significance level.</strong> α = ${o.alpha.toFixed(4)}, taken from the ${o.ciWidth.toFixed(1)}% confidence interval (${o.tailLabel}). It is the chance of rejecting H₀ when H₀ is in fact true.</p>
+                    <p><strong>p-value.</strong> ${o.pStr}. ${meaning}</p>
+                    <p><strong>Decision.</strong> ${concl}</p>
+                    ${link}`;
             }
 
             // --- CSV export ---
@@ -590,60 +782,65 @@
             }
             function onDrag(e, which) {
                 let changed = false;
-                const mean = parseFloat(meanInput.value), sd = parseFloat(stddevInput.value);
-                if (!Number.isFinite(mean) || !Number.isFinite(sd) || sd <= 0) return;
+                const mean = parseFloat(meanInput.value), sd = parseFloat(stddevInput.value), x0 = parseFloat(x0Input.value);
+                if (!Number.isFinite(mean) || !Number.isFinite(sd) || !Number.isFinite(x0) || sd <= 0) return;
+                const z = (mean - x0) / sd;
                 for (const k in e) {
                     const m = k.match(/^shapes\[(\d+)\]\.x0$/); if (!m) continue;
                     const idx = +m[1], val = e[k]; changed = true;
                     if (which === 'standard') {
-                        if (idx === 0) lowerInput.value = clampPct(jStat.normal.cdf(val, 0, 1) * 100);
-                        else if (idx === 1) upperInput.value = clampPct(jStat.normal.cdf(val, 0, 1) * 100);
-                        else if (idx === 2) x0Input.value = (mean + val * sd).toFixed(2);
-                        else if (idx === 3) x0Input.value = (mean - val * sd).toFixed(2);
+                        // Z = (X - X0)/SE: the interval bounds sit at z plus a percentile z-score.
+                        if (idx === 0) lowerInput.value = clampPct(jStat.normal.cdf(val - z, 0, 1) * 100);
+                        else if (idx === 1) upperInput.value = clampPct(jStat.normal.cdf(val - z, 0, 1) * 100);
+                        // The null value is the origin here, so moving it by val moves X0 by val SEs.
+                        else if (idx === 2) x0Input.value = (x0 + val * sd).toFixed(2);
+                        else if (idx === 3) meanInput.value = (x0 + val * sd).toFixed(2);
                     } else {
                         if (idx === 0) lowerInput.value = clampPct(jStat.normal.cdf((val - mean) / sd, 0, 1) * 100);
                         else if (idx === 1) upperInput.value = clampPct(jStat.normal.cdf((val - mean) / sd, 0, 1) * 100);
                         else if (idx === 2) x0Input.value = val.toFixed(2);
+                        else if (idx === 3) meanInput.value = val.toFixed(2);
                     }
                 }
                 if (changed) { syncSlidersFromInputs(); updateAll(); }
             }
 
             // --- Equations ---
-            function updateEquations(mean, stddev, x0, z0) {
+            function updateEquations(mean, stddev, x0) {
                 // SE-based statistic is a z-score (a t-statistic would need the sample SD and df).
                 const zStatistic = (mean - x0) / stddev;
+                const m2 = mean.toFixed(2), se2 = stddev.toFixed(2), n2 = x0.toFixed(2);
                 const eqStandard = `\\[
-                    f(z) = \\frac{1}{\\sqrt{2\\pi}} e^{-\\frac{z^2}{2}}
+                    \\text{null curve: } f(z) = \\frac{1}{\\sqrt{2\\pi}} e^{-\\frac{z^2}{2}}
                 \\]
                 \\[
-                    Z_0 = \\frac{X_0 - m}{SE} = ${z0.toFixed(4)}
-                \\]`;
-                const eqScaledVars = `\\[
-                    f(x) = \\frac{1}{${stddev.toFixed(2)} \\sqrt{2\\pi}} e^{-\\frac{(x - ${mean.toFixed(2)})^2}{2 \\times ${stddev.toFixed(2)}^2}}
+                    Z = \\frac{X - X_0}{SE}
                 \\]
                 \\[
-                    X_0 = ${x0.toFixed(4)}
+                    z = \\frac{m - X_0}{SE} = \\frac{${m2} - ${n2}}{${se2}} = ${zStatistic.toFixed(4)}
                 \\]`;
-                const eqZStatScaled = `\\[
-                    z = \\frac{m - X_0}{SE} = \\frac{${mean.toFixed(2)} - ${x0.toFixed(2)}}{${stddev.toFixed(2)}} = ${zStatistic.toFixed(4)}
+                const density = (name, centre) => `\\[
+                    \\text{${name}: } \\frac{1}{${se2} \\sqrt{2\\pi}} e^{-\\frac{(x - ${centre})^2}{2 \\times ${se2}^2}}
+                \\]`;
+                const eqScaled = density('null curve', n2) + density('interval curve', m2) + `\\[
+                    \\text{interval bounds: } m + z_p \\cdot SE
                 \\]`;
                 document.getElementById('equation-standard').innerHTML = eqStandard;
-                document.getElementById('equation-scaled').innerHTML = eqScaledVars + eqZStatScaled;
+                document.getElementById('equation-scaled').innerHTML = eqScaled;
                 if (window.MathJax && MathJax.typesetPromise) { MathJax.typesetPromise(); }
             }
 
             // --- Z-table ---
-            function isHighlighted(zValue, zLower, zUpper, z0) {
+            function isHighlighted(zValue, zLower, zUpper, zStat) {
                 return Math.abs(zValue - zLower) < 0.005 ||
                        Math.abs(zValue - zUpper) < 0.005 ||
-                       Math.abs(zValue - z0) < 0.005;
+                       Math.abs(zValue - zStat) < 0.005;
             }
             // One row of the table. Everything is indexed in integer hundredths of z
             // (no float accumulation): the row for `tenths` holds sign*(10*tenths + d)
             // for d = 0..9. Out-of-range cells are rendered empty, not skipped, so the
             // columns always line up with the header.
-            function appendTableRow(tbody, label, tenths, sign, startH, endH, zLower, zUpper, z0) {
+            function appendTableRow(tbody, label, tenths, sign, startH, endH, zLower, zUpper, zStat) {
                 const row = tbody.insertRow();
                 row.insertCell().innerText = label;
                 for (let d = 0; d <= 9; d++) {
@@ -652,10 +849,10 @@
                     if (h < startH || h > endH) continue;
                     const zValue = h / 100;
                     cell.innerText = jStat.normal.cdf(zValue, 0, 1).toFixed(6);
-                    if (isHighlighted(zValue, zLower, zUpper, z0)) cell.classList.add('highlight');
+                    if (isHighlighted(zValue, zLower, zUpper, zStat)) cell.classList.add('highlight');
                 }
             }
-            function updateCombinedTable(zLower, zUpper, z0, minZ, maxZ) {
+            function updateCombinedTable(zLower, zUpper, zStat, minZ, maxZ) {
                 const table = document.getElementById('table-combined');
                 table.innerHTML = '';
                 const header = table.createTHead().insertRow();
@@ -670,11 +867,11 @@
                 // a row is shown when any of its cells falls inside the range.
                 const negFirst = Math.max(0, Math.ceil(-(endH + 9) / 10)), negLast = Math.floor(-startH / 10);
                 for (let t = negLast; t >= negFirst; t--)
-                    appendTableRow(tbody, '-' + (t / 10).toFixed(1), t, -1, startH, endH, zLower, zUpper, z0);
+                    appendTableRow(tbody, '-' + (t / 10).toFixed(1), t, -1, startH, endH, zLower, zUpper, zStat);
                 // Positive rows hold hundredths 10t .. 10t+9.
                 const posFirst = Math.max(0, Math.ceil((startH - 9) / 10)), posLast = Math.floor(endH / 10);
                 for (let t = posFirst; t <= posLast; t++)
-                    appendTableRow(tbody, (t / 10).toFixed(1), t, 1, startH, endH, zLower, zUpper, z0);
+                    appendTableRow(tbody, (t / 10).toFixed(1), t, 1, startH, endH, zLower, zUpper, zStat);
             }
 
             // --- Main update ---
@@ -705,14 +902,17 @@
                 errorEl.textContent = '';
 
                 // Samples are tied to the current distribution; discard them if it changed.
-                if (prevMean !== mean || prevSE !== stddev) samples = [];
+                if (prevMean !== mean || prevSE !== stddev) {
+                    stopDrawing();
+                    if (samples.length) clearedNote = true;
+                    samples = [];
+                }
                 prevMean = mean; prevSE = stddev;
 
                 const zLower = jStat.normal.inv(lowerPercent / 100, 0, 1);
                 const zUpper = jStat.normal.inv(upperPercent / 100, 0, 1);
                 const xLower = mean + zLower * stddev;
                 const xUpper = mean + zUpper * stddev;
-                const z0 = (x0 - mean) / stddev;
                 const zStat = (mean - x0) / stddev;
                 const alpha = Math.max(0, 1 - (upperPercent - lowerPercent) / 100);
 
@@ -741,11 +941,12 @@
                 const pStr = p < 0.0001 ? '< 0.0001' : p.toFixed(4);
                 const tailLabel = tails === 'two' ? 'two-tailed' : (tails === 'left' ? 'left-tailed' : 'right-tailed');
 
-                const state = { zLower, zUpper, z0, zStat, mean, stddev, x0, xLower, xUpper,
+                const state = { zLower, zUpper, zStat, reject, mean, stddev, x0, xLower, xUpper,
                                 lowerPct: lowerPercent, upperPct: upperPercent, rejections, tails };
+                lastState = state;
                 plotStandardNormal(state);
                 plotScaledNormal(state);
-                updateEquations(mean, stddev, x0, z0);
+                updateEquations(mean, stddev, x0);
 
                 document.getElementById('output-standard').innerHTML =
                     `α = ${alpha.toFixed(4)} &nbsp;·&nbsp; p = ${pStr} (${tailLabel}) &nbsp;·&nbsp; ` +
@@ -754,10 +955,11 @@
                     `<span class="badge ci">${fmtLevel(upperPercent - lowerPercent)}% CI: [${fmtBound(xLower)}, ${fmtBound(xUpper)}]</span>`;
 
                 document.getElementById('walkthrough').innerHTML = buildWalkthrough({
-                    mean, sd: stddev, x0, zStat, alpha, pStr, reject, tails, tailLabel, ciWidth: upperPercent - lowerPercent
+                    mean, sd: stddev, x0, zStat, alpha, p, pStr, reject, tails, tailLabel, ciWidth: upperPercent - lowerPercent,
+                    xLower, xUpper, central: Math.abs(lowerPercent + upperPercent - 100) < 1e-9
                 });
 
-                updateCombinedTable(zLower, zUpper, z0, minZ, maxZ);
+                updateCombinedTable(zLower, zUpper, zStat, minZ, maxZ);
                 plotSampling();
                 syncSlidersFromInputs();
                 writeURL();

@@ -113,6 +113,9 @@ Ideas and planned improvements for NormJS, roughly ordered by value.
       MathJax over the whole page.
 
 ## Docs
-- [ ] Bring `Documentation.md` up to date with the redesign (tail selection,
+- [x] Bring `Documentation.md` up to date with the redesign (tail selection,
       p-value, walkthrough, sampling simulator, export, sharing, dark mode).
-- [ ] Add screenshots or a short usage GIF to the documentation.
+- [x] Rewrite `readme.md` as a descriptive landing page and document the
+      commit and pull-request workflow.
+- [ ] Add screenshots or a short usage GIF to the documentation. (One
+      screenshot is in; a GIF of dragging a marker is still to do.)

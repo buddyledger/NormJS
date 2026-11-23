@@ -17,8 +17,10 @@ Live: https://buddyledger.github.io/NormJS/normjs.html
 - `normjs.html` — the entire app: HTML, CSS, and JS in one file.
 - `vendor/` — pinned third-party libraries (Plotly, jStat, MathJax + fonts).
 - `tests/`, `playwright.config.js`, `package.json` — dev-only smoke tests.
-- `readme.md` — short project blurb.
+- `readme.md` — the GitHub landing page: what the tool does, how to run and
+  test it, and the commit workflow.
 - `Documentation.md` — user/technical docs. `Roadmap.md` — planned work.
+- `docs/` — images used by the readme and documentation.
 
 There is no build step, package manager, or framework. Editing `normjs.html`
 edits the app.
@@ -62,6 +64,21 @@ GitHub Actions (`.github/workflows/test.yml`) runs the suite on every pull
 request and on pushes to `main`. `package.json` exists only for this dev
 tooling; the app still has no build step. When behaviour changes, update or add
 a test alongside it.
+
+## Commits and pull requests
+
+GitHub Pages publishes from `main`, so a change on `main` is live within a
+minute or so.
+
+- Docs, roadmap, tests and CI configuration: commit straight to `main`.
+- Anything touching `normjs.html` or `vendor/` (or mixing app and docs
+  changes): branch (`fix/…`, `feature/…`, `docs/…`), open a pull request, wait
+  for the "Smoke tests" check, squash-merge, delete the branch.
+- Commit subjects are imperative and say what changed; the body says why.
+- Tick the `Roadmap.md` item in the change that completes it, and keep
+  `readme.md` and `Documentation.md` in step with behaviour changes.
+- If the look of the page changes noticeably, retake `docs/screenshot.png`
+  (1280×860 viewport, state `#m=2.3&se=1&x0=0&t=two`).
 
 ## Conventions
 

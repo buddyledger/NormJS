@@ -97,14 +97,22 @@ A change that mixes both goes through a pull request.
 | `.github/workflows/test.yml` | The CI job that runs them. |
 | `docs/` | Images used by the documentation. |
 | `Documentation.md`, `Roadmap.md` | User and technical docs; planned work. |
+| `LICENSE` | The project's licence (MIT). |
 | `CLAUDE.md` | Conventions for AI coding agents working in the repository. |
 
 ## Credits
 
-Written by [buddyledger](https://github.com/buddyledger) with AI coding
+Written by [Buddy Ledger](https://github.com/buddyledger) with AI coding
 assistance; current development uses [Claude Code](https://claude.com/claude-code).
 
-NormJS uses [Plotly.js](https://plotly.com/javascript/) and
-[jStat](https://github.com/jstat/jstat) (both MIT) and
-[MathJax](https://www.mathjax.org/) (Apache 2.0). Their licences are in
-`vendor/`. The project itself does not have a licence file yet.
+## Licence
+
+NormJS is released under the [MIT licence](LICENSE): use, copy, change and
+redistribute it for any purpose, as long as the copyright notice and licence
+text stay with any copy.
+
+That covers the project's own files. The libraries in `vendor/` keep their own
+licences: [Plotly.js](https://plotly.com/javascript/) and
+[jStat](https://github.com/jstat/jstat) are MIT, and
+[MathJax](https://www.mathjax.org/) is Apache 2.0. If you redistribute NormJS
+with `vendor/` included, keep the licence notices in that folder.

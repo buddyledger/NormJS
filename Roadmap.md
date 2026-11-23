@@ -108,7 +108,8 @@ Ideas and planned improvements for NormJS, roughly ordered by value.
       and CSV/PNG export.
 - [x] Add a `.gitattributes` that keeps `vendor/` byte-identical to upstream
       (no line-ending conversion) and marks it as vendored.
-- [ ] Add a `LICENSE` file for the project itself so others can reuse it.
+- [x] Add a `LICENSE` file for the project itself so others can reuse it
+      (MIT).
 - [ ] Typeset only the equation containers on update instead of re-running
       MathJax over the whole page.
 

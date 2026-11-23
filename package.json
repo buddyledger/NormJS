@@ -1,6 +1,7 @@
 {
   "name": "normjs-tests",
   "private": true,
+  "license": "MIT",
   "description": "Dev-only tooling for NormJS smoke tests. The app itself has no build step.",
   "scripts": {
     "test": "playwright test"

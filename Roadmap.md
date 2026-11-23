@@ -6,7 +6,7 @@ Ideas and planned improvements for NormJS, roughly ordered by value.
 - [x] Vendor Plotly, jStat, and MathJax locally instead of loading from CDNs.
       Removes the single point of failure, and enables offline use plus
       end-to-end testing in restricted networks.
-- [ ] Show a clear, visible message if a dependency fails to load, instead of a
+- [x] Show a clear, visible message if a dependency fails to load, instead of a
       blank/broken page.
 
 ## Statistics
@@ -14,7 +14,7 @@ Ideas and planned improvements for NormJS, roughly ordered by value.
       and switch the statistic and critical values from z to t.
 - [x] Show the p-value alongside the test statistic.
 - [x] One- vs two-tailed test selection.
-- [ ] Show the interval bounds in original units (e.g. "95% CI: [a, b]"). The
+- [x] Show the interval bounds in original units (e.g. "95% CI: [a, b]"). The
       current "CI width: 95.00%" badge is the confidence level, not a width.
 
 ## Teaching content
@@ -55,8 +55,10 @@ Ideas and planned improvements for NormJS, roughly ordered by value.
       (Partly done: sliders and dragged markers clamp; typed values are still
       only rejected.)
 - [x] Persist inputs in the URL (shareable links) or localStorage.
-- [ ] Review keyboard accessibility and mobile layout. Known issue: the page
-      scrolls horizontally at phone width (~324px).
+- [ ] Review keyboard accessibility and mobile layout. (The horizontal scroll
+      at phone width is fixed; the rest is still to review.)
+- [ ] React to URL hash changes: pasting a shared link into a tab that already
+      has the app open currently needs a reload to take effect.
 - [x] Dark mode.
 - [ ] Make changes to mean and SE visible: the scaled plot's axis is always
       m ± 4·SE, so only tick labels move. Add a fixed-axis option or a faint
@@ -96,7 +98,7 @@ Ideas and planned improvements for NormJS, roughly ordered by value.
 ## Code quality
 - [x] Remove the dead `start === end` float-equality guards in the plot
       functions.
-- [ ] Fix z-table column alignment at range boundaries (out-of-range cells are
+- [x] Fix z-table column alignment at range boundaries (out-of-range cells are
       skipped rather than rendered empty, which shifts columns).
 - [x] Playwright smoke tests (page loads offline, plots/equations/table render,
       one-tailed, asymmetric and invalid-input cases) run by GitHub Actions on

@@ -117,3 +117,72 @@ test('invalid input shows an inline message and keeps the last valid view', asyn
     await page.locator('#stddev').fill('1');
     await expect(page.locator('#error-message')).toHaveText('');
 });
+
+test('interval badge shows the confidence level and bounds in x units', async ({ page }) => {
+    await open(page);
+    await expect(page.locator('#output-scaled')).toHaveText('95% CI: [-1.96, 1.96]');
+
+    // A hash-only change does not reload the page, so reload to pick up the new state.
+    await open(page, { l: 5, u: 95, m: 10, se: 2 });
+    await page.reload();
+    await expect(page.locator('#output-scaled')).toHaveText('90% CI: [6.71, 13.29]');
+});
+
+// Text of every body row of the z-table, as arrays of cell strings.
+function tableRows(page) {
+    return page.locator('#table-combined tbody tr').evaluateAll(rows =>
+        rows.map(r => [...r.cells].map(c => c.textContent)));
+}
+
+test('z-table keeps columns aligned when the range starts mid-row', async ({ page }) => {
+    await open(page, { mn: 0.05, mx: 1 });
+    const rows = await tableRows(page);
+    expect(rows.map(r => r[0])).toEqual(['0.0', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9', '1.0']);
+    for (const r of rows) expect(r).toHaveLength(11);
+    // Row 0.0: columns 0.00-0.04 are out of range and empty; 0.05 sits under its own header.
+    expect(rows[0].slice(1, 6)).toEqual(['', '', '', '', '']);
+    expect(rows[0][6]).toBe('0.519939');
+    // Row 1.0: only 1.00 is in range.
+    expect(rows[10][1]).toBe('0.841345');
+    expect(rows[10].slice(2)).toEqual(Array(9).fill(''));
+});
+
+test('z-table includes a negative row that is only partly in range', async ({ page }) => {
+    await open(page, { mn: -1, mx: -0.56 });
+    const rows = await tableRows(page);
+    expect(rows.map(r => r[0])).toEqual(['-1.0', '-0.9', '-0.8', '-0.7', '-0.6', '-0.5']);
+    for (const r of rows) expect(r).toHaveLength(11);
+    // Row -0.5: -0.50..-0.55 are above the range; -0.56..-0.59 are shown.
+    expect(rows[5].slice(1, 7)).toEqual(Array(6).fill(''));
+    expect(rows[5][7]).toBe('0.287740');
+});
+
+test('no horizontal page scroll at phone width', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await open(page);
+    await expect(page.locator('mjx-container').first()).toBeVisible();
+    const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+    }));
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+});
+
+test('a missing core library shows a clear message instead of a blank page', async ({ page }) => {
+    await page.route('**/vendor/plotly/**', route => route.abort());
+    await page.goto(PAGE_URL);
+    await expect(page.locator('#load-error')).toBeVisible();
+    await expect(page.locator('#load-error')).toContainText('NormJS could not start');
+    await expect(page.locator('#load-error')).toContainText('Plotly failed to load');
+    await expect(page.locator('.inputs')).toBeHidden();
+    await expect(page.locator('#standard-normal-plot')).toBeHidden();
+});
+
+test('missing MathJax only warns; plots and table still work', async ({ page }) => {
+    await page.route('**/vendor/mathjax/**', route => route.abort());
+    await open(page);
+    await expect(page.locator('#load-error')).toBeVisible();
+    await expect(page.locator('#load-error')).toContainText('MathJax failed to load');
+    await expect(page.locator('.js-plotly-plot')).toHaveCount(3);
+    await expect(page.locator('#table-combined tbody tr')).toHaveCount(62);
+});

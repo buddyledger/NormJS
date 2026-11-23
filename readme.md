@@ -11,21 +11,28 @@ in the browser; there is nothing to install.
 
 ## What it does
 
-- **Two linked plots.** The standard normal N(0, 1) and the scaled normal
-  N(m, SE) show the same interval, null value and test, so students can see how
-  standardizing maps one onto the other.
+- **Two curves, two views.** A red curve centred on the null value carries the
+  rejection region; a blue curve centred on the observed mean carries the
+  confidence interval. One plot shows them in original units and the other
+  after standardizing, so students can see how one maps onto the other and why
+  the test and the interval agree.
 - **Confidence intervals.** Set the lower and upper percentiles (or pick 90%,
   95% or 99%) and read the bounds in original units, for example
   "95% CI: [0.34, 4.26]".
 - **Hypothesis tests.** Choose a two-tailed, left-tailed or right-tailed test.
-  The rejection region is shaded, the z statistic is marked, and the p-value
-  and the verdict are shown next to α.
+  H₀ is rejected exactly when the observed mean falls in the red shading; the
+  z statistic, the p-value and the verdict are shown next to α.
+- **Mean and SE made visible.** The standard normal is drawn in grey behind
+  the scaled curve, so changing the mean or SE visibly shifts and stretches it,
+  and a sentence under the plot says by how much.
 - **A step-by-step reading.** "Reading this test" writes out the hypotheses,
-  the statistic, α, the p-value and the decision for the current values.
+  the statistic, α, the p-value and the decision for the current values, and
+  says what each one means.
 - **A z-table.** A standard normal cumulative table laid out like a printed
   one, with the cells for the current interval and null value highlighted.
-- **A sampling simulator.** Draw random values from the scaled normal and watch
-  the histogram approach the curve.
+- **A sampling simulator.** Draw 1, 10, 100 or 1000 random values from the
+  scaled normal. Each draw drops in as a dot; the pile looks nothing like the
+  curve at first and settles onto it as the draws add up.
 - **Sharing and export.** The address bar always holds a link to the current
   state. Plots download as PNG and the table as CSV. There is a dark mode.
 

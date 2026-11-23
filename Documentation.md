@@ -33,9 +33,8 @@ under the controls, and the last valid view stays on screen.
 ### Dragging markers
 
 The vertical markers on both plots can be dragged. Dragging an interval bound
-changes the lower or upper percentile, and dragging the null marker changes X₀.
-On the standard plot, dragging the purple statistic marker also changes X₀,
-since the statistic is defined by it.
+changes the lower or upper percentile, dragging the red null marker changes X₀,
+and dragging the purple marker changes the mean.
 
 ### Toolbar
 
@@ -46,59 +45,107 @@ since the statistic is defined by it.
 
 ## What it shows
 
-### Standard Normal panel
+### The two curves
 
-The standard normal density N(0, 1), with:
+Both plots show the same two curves. They have the same width, because they
+share one SE, and differ only in where they are centred.
 
-- the confidence region shaded between the two percentile z-scores, which are
-  marked with dotted teal lines labelled `z*`;
-- a red dash-dot marker at **Z₀ = (X₀ − m)/SE**, the standardized location of
-  the null value;
-- a solid purple marker at the test statistic **z = (m − X₀)/SE = −Z₀**;
-- the rejection region or regions for the chosen test shaded red, labelled with
-  their area.
+- The **null curve** (red) is centred on the null value X₀. It shows where
+  sample means would fall if H₀ were true. Its shaded tails are the rejection
+  region, with total area α.
+- The **interval curve** (blue) is centred on the observed mean m. Its shaded
+  middle is the confidence interval.
 
-H₀ is rejected exactly when the purple marker falls in a red region. Two-tailed
-regions are always symmetric (α/2 in each tail), even if the interval
-percentiles are not.
+Two vertical markers carry the test: a red dash-dot line at the null value and
+a solid purple line at the observed mean. **H₀ is rejected exactly when the
+purple line falls in the red shading.** For a two-tailed test with a central
+interval that is the same as the null value falling outside the interval,
+which is why the test and the interval always agree.
 
-Below the plot are α, the p-value and the verdict ("Reject H₀" or "Fail to
-reject H₀").
+Each plot has a legend under it naming the lines and shaded areas.
 
 ### Scaled Normal panel
 
-The normal density N(m, SE) with the same confidence region shaded in the
-original units, a marker at X₀, and the interval bounds, for example
-"95% CI: [0.34, 4.26]".
+The picture in original units: the null curve N(X₀, SE), the interval curve
+N(m, SE), the null value X₀ and the observed mean m. Below the plot are the
+interval bounds, for example "95% CI: [0.34, 4.26]".
+
+A grey dashed curve shows the standard normal N(0, 1) for comparison, and the
+axis widens to include it. Changing the mean slides the blue curve away from
+it; changing the SE makes both curves wider and lower, or narrower and taller.
+A sentence under the plot says the same in words ("shifted right by 2.3 and
+1.5× as wide and 0.67× as tall"). The reference curve is left out, and the
+sentence says so, when the curves could not all be read on one axis (for
+example m = 100, SE = 15).
+
+### Standard Normal panel
+
+The same picture after standardizing with **Z = (X − X₀)/SE**. The null curve
+becomes the standard normal N(0, 1), the null value moves to 0, and one unit on
+the axis is one standard error. The observed mean lands at the test statistic
+
+    z = (m − X₀) / SE
+
+and the interval curve is centred there. The critical values (`z*`) are
+labelled at the edges of the rejection regions, and each region is labelled
+with its area. Two-tailed regions are always symmetric (α/2 in each tail), even
+if the interval percentiles are not.
 
 Because SE is used (not a sample standard deviation with degrees of freedom),
 the statistic is a **z-statistic**, not a t-statistic.
 
+Below the plot are α, the p-value and the verdict ("Reject H₀" or "Fail to
+reject H₀"), and a sentence reading the plot with the current numbers.
+
 ### Equations
 
-Each panel has a collapsible "Equations" section that shows the density and
-the standardizing formulas with the current values substituted in.
+Each panel has a collapsible "Equations" section. The standard panel shows the
+null curve's density, the standardizing formula and the test statistic with
+the current values substituted in; the scaled panel shows the densities of the
+null and interval curves.
 
 ### Reading this test
 
-A written walkthrough of the current test in five steps: the hypotheses, the
-test statistic, the significance level, the p-value and the decision.
+A written walkthrough of the current test: the hypotheses, the test statistic,
+the significance level, the p-value and the decision. Each step is also
+interpreted: how many standard errors the mean is from the null value, what
+the p-value means as a share of samples, and that failing to reject H₀ does
+not show H₀ is true. For a two-tailed test with a central interval (such as
+2.5–97.5) a last step shows that the interval gives the same answer: X₀ outside
+the interval means reject.
 
 ### Cumulative z-table
 
 A standard normal CDF table over the chosen Z range, laid out like a printed
 z-table (tenths down the rows, hundredths across the columns). Values outside
 the chosen range are left blank so the columns stay aligned. Cells matching
-the interval bounds or Z₀ are highlighted. The header row stays in view while
+the interval's percentile z-scores (for example ±1.96) or the test statistic z
+are highlighted. The header row stays in view while
 scrolling, and the section can be collapsed.
 
 ### Sampling Simulator
 
-"Draw samples" adds 300 random values from N(m, SE) to a histogram, in small
-batches, with the theoretical curve drawn over it. The sample count, mean and
-standard deviation are shown next to the theoretical values. "Clear" empties
-the histogram; changing the mean or SE also clears it, because the samples no
-longer belong to the distribution on screen.
+"Draw 1", "Draw 10", "Draw 100" and "Draw 1000" add that many random values
+from N(m, SE).
+
+- **Dots, then bars.** Each draw is a dot stacked in the column where it
+  landed (40 columns across m ± 4·SE), so the picture can be counted. Dots
+  inside the interval are blue, dots outside it are grey, and the latest draw
+  is ringed. Past 400 draws the stacks are drawn as histogram bars instead.
+- **Animation.** Runs of up to 10 arrive one at a time: each value appears
+  above the plot and then drops into its column. Larger runs arrive in batches
+  over about a second. If the browser asks for reduced motion, all draws are
+  added at once.
+- **Expected line.** The line is the number of draws each column should hold
+  on average, n × column width × density, so it grows with the stacks.
+- **Statistics.** Under the plot: the number of draws, their mean and standard
+  deviation next to m and SE, and how many fell inside the interval ("96 of
+  100 (96.0%) inside the 95% interval"). With few draws that share can be far
+  from the confidence level; with many it settles near it.
+
+"Clear" empties the plot. Changing the mean or SE also clears it, with a note
+saying so, because the draws no longer belong to the curve on screen. The
+simulator holds at most 20,000 draws.
 
 ## The hypothesis test
 
@@ -114,11 +161,13 @@ longer belong to the distribution on screen.
 
 ## The math
 
-- Density: `f(x) = 1 / (SE·√(2π)) · exp(−(x − m)² / (2·SE²))`
+- Interval curve: `f(x) = 1 / (SE·√(2π)) · exp(−(x − m)² / (2·SE²))`
+- Null curve: the same with X₀ in place of m
 - Percentile → z-score: `z_p = Φ⁻¹(p)`
-- Scaled interval bound: `x = m + z·SE`
-- Standardized null value: `Z₀ = (X₀ − m) / SE`
-- Test statistic: `z = (m − X₀) / SE = −Z₀`
+- Interval bound: `x = m + z_p·SE`
+- Standardizing: `Z = (X − X₀) / SE`
+- Test statistic: `z = (m − X₀) / SE`
+- Rejection region in original units: beyond `X₀ ± z*·SE` (two-tailed)
 
 ## Shareable links
 

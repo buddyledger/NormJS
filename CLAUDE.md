@@ -5,9 +5,10 @@ Guidance for Claude Code (and other agents) working in this repository.
 ## What this is
 
 NormJS is a single-page, client-side teaching tool for the normal distribution.
-Side by side it renders the standard normal and a scaled (mean/SE) normal,
-shades a confidence interval, marks a null-hypothesis value, reports the z test
-statistic, and prints a standard normal cumulative (z) table.
+Side by side, in standard units and in original units, it draws the null
+distribution with its rejection region and the distribution around the observed
+mean with its confidence interval, reports the z test statistic and p-value,
+runs a sampling simulator, and prints a standard normal cumulative (z) table.
 
 Live: https://buddyledger.github.io/NormJS/normjs.html
 
@@ -84,8 +85,14 @@ minute or so.
 
 - Keep everything in `normjs.html` unless there's a clear reason to split.
 - The SE-based statistic is a z-statistic, not a t-statistic — label it `z`.
-- `Z₀` in the standard panel is the standardized location of the null value,
-  `(X₀ − m)/SE`, and must stay consistent with the red marker line.
+- Both plots are centred on the null value and show two curves: the null curve
+  (on `X₀`, carrying the rejection regions) and the interval curve (on `m`,
+  carrying the confidence interval). The standard panel is the scaled panel
+  after `Z = (X − X₀)/SE`, so the red null marker is at 0 and the purple
+  marker is the one test statistic, `z = (m − X₀)/SE`. Do not reintroduce a
+  second, opposite-signed statistic (`Z₀`).
+- Shape order in both plots is `[interval lower, interval upper, null value,
+  observed mean or z]`; the drag handler and the tests rely on it.
 - Iterate z-table rows/columns by integer index, never by accumulating floats.
 - Validate inputs inline (no blocking `alert()`); keep the last valid view on
   screen when input is invalid.

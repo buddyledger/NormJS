@@ -4,12 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NormJS — Normal Distribution Explorer</title>
-    <!-- Include Plotly.js -->
-    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
-    <!-- Include jStat for statistical calculations -->
-    <script src="https://cdn.jsdelivr.net/npm/jstat@1.9.6/dist/jstat.min.js"></script>
-    <!-- Include MathJax for rendering equations -->
-    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <!-- Libraries are vendored under vendor/ (see vendor/README.md); no network needed. -->
+    <!-- Plotly.js 2.24.1 -->
+    <script src="vendor/plotly/plotly-2.24.1.min.js"></script>
+    <!-- jStat 1.9.6 for statistical calculations -->
+    <script src="vendor/jstat/jstat-1.9.6.min.js"></script>
+    <!-- MathJax 3.2.2 for rendering equations (fonts load from vendor/mathjax/output/) -->
+    <script src="vendor/mathjax/tex-mml-chtml.js"></script>
     <style>
         :root {
             --bg: #f4f6f9; --card: #ffffff; --border: #e2e8f0; --text: #1e293b; --muted: #64748b;

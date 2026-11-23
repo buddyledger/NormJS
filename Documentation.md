@@ -28,6 +28,11 @@ The standard normal density N(0, 1), with the confidence region shaded between
 the percentile z-scores and a marker at **Z₀ = (X₀ − m)/SE** — the standardized
 location of the null value (this matches the red marker line).
 
+The rejection region(s) for the chosen test are shaded red, and a solid purple
+marker shows the test statistic **z = (m − X₀)/SE = −Z₀**. H₀ is rejected
+exactly when the purple marker falls in a red region. Two-tailed regions are
+always symmetric (α/2 per tail), even if the interval percentiles are not.
+
 ### Scaled Normal panel
 The normal density N(m, SE) with the same confidence region shaded in the
 original units, a marker at X₀, and the test statistic:

@@ -16,6 +16,7 @@ Live: https://buddyledger.github.io/NormJS/normjs.html
 - `index.html` — meta-refresh redirect to `normjs.html`.
 - `normjs.html` — the entire app: HTML, CSS, and JS in one file.
 - `vendor/` — pinned third-party libraries (Plotly, jStat, MathJax + fonts).
+- `tests/`, `playwright.config.js`, `package.json` — dev-only smoke tests.
 - `readme.md` — short project blurb.
 - `Documentation.md` — user/technical docs. `Roadmap.md` — planned work.
 
@@ -45,6 +46,22 @@ access. To serve it over HTTP, run `python -m http.server 8765` from the repo
 root and open `http://localhost:8765/normjs.html` (`.claude/launch.json` has
 this as the `normjs-static` preview). Pure logic (table enumeration, the
 statistic math) can be checked with Node without a browser.
+
+### Smoke tests
+
+`tests/smoke.spec.js` is a Playwright suite that opens `normjs.html` from disk
+(`file://`, no server) and checks that the libraries load with no network
+requests, the plots, equations and z-table render, and the one-tailed,
+asymmetric-interval and invalid-input cases give the right picture and verdict.
+
+    npm ci
+    npx playwright install chromium   # first time only
+    npm test
+
+GitHub Actions (`.github/workflows/test.yml`) runs the suite on every pull
+request and on pushes to `main`. `package.json` exists only for this dev
+tooling; the app still has no build step. When behaviour changes, update or add
+a test alongside it.
 
 ## Conventions
 

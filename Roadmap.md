@@ -98,11 +98,13 @@ Ideas and planned improvements for NormJS, roughly ordered by value.
       functions.
 - [ ] Fix z-table column alignment at range boundaries (out-of-range cells are
       skipped rather than rendered empty, which shifts columns).
-- [ ] Add an automated test suite (logic-level, plus headless browser once the
-      libraries are vendored). Now unblocked: start with a Playwright smoke
-      test (page loads, three plots render, a right-tailed case gives the right
-      verdict) run by GitHub Actions on each pull request.
-- [ ] Add a `.gitattributes` that keeps `vendor/` byte-identical to upstream
+- [x] Playwright smoke tests (page loads offline, plots/equations/table render,
+      one-tailed, asymmetric and invalid-input cases) run by GitHub Actions on
+      each pull request.
+- [ ] Extend the test suite: logic-level tests for the z-table enumeration and
+      statistic math, plus browser tests for dragging markers, the simulator
+      and CSV/PNG export.
+- [x] Add a `.gitattributes` that keeps `vendor/` byte-identical to upstream
       (no line-ending conversion) and marks it as vendored.
 - [ ] Add a `LICENSE` file for the project itself so others can reuse it.
 - [ ] Typeset only the equation containers on update instead of re-running

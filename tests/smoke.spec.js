@@ -216,12 +216,30 @@ test('scaled plot shows the standard normal for reference and widens the axis to
     await expect(page.locator('#explain-scaled')).toContainText('1.5× as wide and 0.67× as tall');
 });
 
-test('reference curve is left out when it would not be readable on the same axis', async ({ page }) => {
-    await open(page, { m: 100, se: 15, x0: 100 });
+test('reference curve is left out only when it is too far away to share the axis', async ({ page }) => {
+    await open(page, { m: 100, se: 1, x0: 100 });
     const s = await scaledPanel(page);
     expect(s.hasReference).toBe(false);
-    expect(s.range).toEqual([40, 160]);
+    expect(s.range).toEqual([96, 104]);
     await expect(page.locator('#explain-scaled')).toContainText('The standard normal is not drawn here');
+});
+
+test('reference curve stays at a high SE, with the scaled curves kept readable', async ({ page }) => {
+    await open(page, { se: 10 });
+    const s = await scaledPanel(page);
+    expect(s.hasReference).toBe(true);
+    expect(s.range).toEqual([-40, 40]);
+    // The reference peak (0.399) is exactly 10× the scaled peak here, so nothing is cut off yet.
+    const yMax = await page.evaluate(() => document.getElementById('plot-scaled').layout.yaxis.range[1]);
+    expect(yMax).toBeCloseTo(1.06 * 0.39894, 3);
+
+    await open(page, { se: 40 });
+    await page.reload();
+    const tall = await scaledPanel(page);
+    expect(tall.hasReference).toBe(true);
+    const capped = await page.evaluate(() => document.getElementById('plot-scaled').layout.yaxis.range[1]);
+    expect(capped).toBeCloseTo(1.06 * 10 * 0.39894 / 40, 4);
+    await expect(page.locator('#explain-scaled')).toContainText('its top is cut off');
 });
 
 // Names and point counts of the simulator's traces.
@@ -230,7 +248,7 @@ function samplingTraces(page) {
         document.getElementById('plot-sampling').data.map(t => [t.name, t.x.length])));
 }
 
-test('simulator: draws are dots, then bars, and are cleared when the curve changes', async ({ page }) => {
+test('simulator: draws are blocks, then bars, and are cleared when the curve changes', async ({ page }) => {
     await open(page);
     const stats = page.locator('#sampling-stats');
     await expect(stats).toContainText('No draws yet');
@@ -239,7 +257,7 @@ test('simulator: draws are dots, then bars, and are cleared when the curve chang
     await expect(stats).toContainText('n = 10 ·');
     await expect(stats).toContainText('of 10 (');
     let t = await samplingTraces(page);
-    expect(t.dots + t['dots-outside']).toBe(10);
+    expect(t.draws + t['draws-outside']).toBe(10);
     expect(t.latest).toBe(1);
     expect(t.bars).toBeUndefined();
 
@@ -250,8 +268,8 @@ test('simulator: draws are dots, then bars, and are cleared when the curve chang
     await expect(stats).toContainText('n = 1011 ·');
     t = await samplingTraces(page);
     expect(t.bars).toBe(40);
-    expect(t.dots).toBeUndefined();
-    await expect(page.locator('#sampling-note')).toContainText('A histogram is the same stacks of draws');
+    expect(t.draws).toBeUndefined();
+    await expect(page.locator('#sampling-note')).toContainText('each column is drawn as a single bar');
 
     await page.locator('#mean').fill('1');
     await expect(stats).toContainText('cleared because the mean or SE changed');
@@ -333,4 +351,50 @@ test('z-table highlights the percentile z-scores and the test statistic', async 
     const highlighted = await page.locator('#table-combined td.highlight').allTextContents();
     // Φ(−1.96), Φ(1.20), Φ(1.96)
     expect(highlighted).toEqual(['0.024998', '0.884930', '0.975002']);
+    // The statistic and the percentile z-scores are coloured differently.
+    await expect(page.locator('#table-combined td.hl-stat')).toHaveText('0.884930');
+    await expect(page.locator('#table-combined td.hl-bound')).toHaveText(['0.024998', '0.975002']);
+});
+
+// The simulator's curve, y range and total histogram area.
+function samplingShape(page) {
+    return page.evaluate(() => {
+        const gd = document.getElementById('plot-sampling');
+        const curve = gd.data.find(t => t.name === 'expected');
+        const width = (gd.layout.xaxis.range[1] - gd.layout.xaxis.range[0]) / 40;
+        const area = gd.data.filter(t => t.type === 'bar' && t.name !== 'latest')
+            .reduce((sum, t) => sum + t.y.reduce((a, b) => a + b, 0) * width, 0);
+        return { peak: Math.max(...curve.y), yRange: gd.layout.yaxis.range, area };
+    });
+}
+
+test('simulator: the curve stays fixed and the histogram keeps a total area of 1', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await open(page);
+    const empty = await samplingShape(page);
+    expect(empty.peak).toBeCloseTo(0.39894, 4);
+
+    for (const [label, n] of [['Draw 10', 10], ['Draw 100', 110], ['Draw 1000', 1110]]) {
+        await page.getByRole('button', { name: label, exact: true }).click();
+        await expect(page.locator('#sampling-stats')).toContainText(`n = ${n} ·`);
+        const s = await samplingShape(page);
+        expect(s.peak).toBe(empty.peak);
+        expect(s.yRange).toEqual(empty.yRange);
+        expect(s.area).toBeCloseTo(1, 6);
+    }
+});
+
+test('every plot and the z-table has a legend', async ({ page }) => {
+    await open(page);
+    await expect(page.locator('#legend-standard')).toContainText('null curve N(0, 1)');
+    await expect(page.locator('#legend-standard')).toContainText('test statistic z');
+    await expect(page.locator('#legend-scaled')).toContainText('interval curve N(m, SE)');
+    await expect(page.locator('#legend-scaled')).toContainText('standard normal N(0, 1)');
+    await expect(page.locator('#legend-sampling')).toContainText('distribution N(m, SE), fixed');
+    await expect(page.locator('#legend-table')).toContainText('test statistic z');
+    // Each legend sits directly under its plot.
+    for (const id of ['standard', 'scaled', 'sampling']) {
+        const next = await page.locator(`#plot-${id}`).evaluate(el => el.nextElementSibling.id);
+        expect(next).toBe(`legend-${id}`);
+    }
 });

@@ -290,9 +290,9 @@
                 const dark = document.documentElement.dataset.theme === 'dark';
                 return dark
                     ? { paper: '#1e293b', plot: '#1e293b', font: '#e2e8f0', grid: '#334155', curve: '#60a5fa',
-                        ciFill: 'rgba(45,212,191,0.18)', ciLine: '#2dd4bf', rejFill: 'rgba(248,113,113,0.20)', nullLine: '#f87171' }
+                        ciFill: 'rgba(45,212,191,0.18)', ciLine: '#2dd4bf', rejFill: 'rgba(248,113,113,0.20)', nullLine: '#f87171', statLine: '#c084fc' }
                     : { paper: '#ffffff', plot: '#ffffff', font: '#1e293b', grid: '#e2e8f0', curve: '#2563eb',
-                        ciFill: 'rgba(13,148,136,0.18)', ciLine: '#0d9488', rejFill: 'rgba(220,38,38,0.15)', nullLine: '#dc2626' };
+                        ciFill: 'rgba(13,148,136,0.18)', ciLine: '#0d9488', rejFill: 'rgba(220,38,38,0.15)', nullLine: '#dc2626', statLine: '#7c3aed' };
             }
 
             // --- Debounced update ---
@@ -413,9 +413,15 @@
                 const shapes = [
                     vLine(clamp(Number.isFinite(s.zLower) ? s.zLower : -4, -4, 4), tc.ciLine, 'dot'),
                     vLine(clamp(Number.isFinite(s.zUpper) ? s.zUpper : 4, -4, 4), tc.ciLine, 'dot'),
-                    vLine(clamp(s.z0, -4, 4), tc.nullLine, 'dashdot')
+                    vLine(clamp(s.z0, -4, 4), tc.nullLine, 'dashdot'),
+                    // The test statistic z = -Z0 is what the rejection regions are judged against.
+                    vLine(clamp(s.zStat, -4, 4), tc.statLine, 'solid')
                 ];
                 const annotations = [];
+                const markerLabel = (x, y, text, color) => ({ x: clamp(x, -3.4, 3.4), y: y, yref: 'paper', text: text, showarrow: false,
+                    font: { size: 11, color: color }, bgcolor: tc.paper, borderpad: 2, xanchor: 'center', yanchor: 'middle' });
+                annotations.push(markerLabel(s.zStat, 0.93, `z = ${s.zStat.toFixed(2)}`, tc.statLine));
+                annotations.push(markerLabel(s.z0, 0.80, `Z₀ = ${s.z0.toFixed(2)}`, tc.nullLine));
                 if (Number.isFinite(s.zLower)) annotations.push({ x: clamp(s.zLower, -4, 4), y: 1.02, yref: 'paper', text: `z* = ${s.zLower.toFixed(2)}`, showarrow: false, font: { size: 11, color: tc.ciLine }, xanchor: 'center', yanchor: 'bottom' });
                 if (Number.isFinite(s.zUpper)) annotations.push({ x: clamp(s.zUpper, -4, 4), y: 1.02, yref: 'paper', text: `z* = ${s.zUpper.toFixed(2)}`, showarrow: false, font: { size: 11, color: tc.ciLine }, xanchor: 'center', yanchor: 'bottom' });
                 s.rejections.forEach(([ra, rb]) => {
@@ -555,6 +561,7 @@
                         if (idx === 0) lowerInput.value = clampPct(jStat.normal.cdf(val, 0, 1) * 100);
                         else if (idx === 1) upperInput.value = clampPct(jStat.normal.cdf(val, 0, 1) * 100);
                         else if (idx === 2) x0Input.value = (mean + val * sd).toFixed(2);
+                        else if (idx === 3) x0Input.value = (mean - val * sd).toFixed(2);
                     } else {
                         if (idx === 0) lowerInput.value = clampPct(jStat.normal.cdf((val - mean) / sd, 0, 1) * 100);
                         else if (idx === 1) upperInput.value = clampPct(jStat.normal.cdf((val - mean) / sd, 0, 1) * 100);
@@ -610,8 +617,10 @@
                 const table = document.getElementById('table-combined');
                 table.innerHTML = '';
                 const header = table.createTHead().insertRow();
-                header.insertCell().innerHTML = '<strong>Z</strong>';
-                for (let d = 0; d <= 9; d++) header.insertCell().innerHTML = `<strong>${(d / 100).toFixed(2)}</strong>`;
+                // Real <th> cells so the sticky `thead th` styling applies.
+                const addTh = text => { const th = document.createElement('th'); th.textContent = text; header.appendChild(th); };
+                addTh('Z');
+                for (let d = 0; d <= 9; d++) addTh((d / 100).toFixed(2));
                 const tbody = table.createTBody();
                 const zStart = Math.min(minZ, maxZ), zEnd = Math.max(minZ, maxZ);
                 const startTenths = Math.round(zStart * 10), endTenths = Math.round(zEnd * 10);
@@ -665,8 +674,11 @@
                 // Rejection region(s) in z-space.
                 let rejections = [];
                 if (tails === 'two') {
-                    const lo = Number.isFinite(zLower) ? zLower : -4, hi = Number.isFinite(zUpper) ? zUpper : 4;
-                    rejections = [[-4, lo], [hi, 4]];
+                    // Symmetric, alpha/2 per tail, so the picture always agrees with the
+                    // two-sided p-value even when the interval percentiles are asymmetric.
+                    const zc = jStat.normal.inv(1 - alpha / 2, 0, 1);
+                    const c = Number.isFinite(zc) ? zc : 4;
+                    rejections = [[-4, -c], [c, 4]];
                 } else if (tails === 'left') {
                     const zc = jStat.normal.inv(alpha, 0, 1);
                     rejections = [[-4, Number.isFinite(zc) ? zc : -4]];
@@ -684,7 +696,7 @@
                 const pStr = p < 0.0001 ? '< 0.0001' : p.toFixed(4);
                 const tailLabel = tails === 'two' ? 'two-tailed' : (tails === 'left' ? 'left-tailed' : 'right-tailed');
 
-                const state = { zLower, zUpper, z0, mean, stddev, x0, xLower, xUpper,
+                const state = { zLower, zUpper, z0, zStat, mean, stddev, x0, xLower, xUpper,
                                 lowerPct: lowerPercent, upperPct: upperPercent, rejections, tails };
                 plotStandardNormal(state);
                 plotScaledNormal(state);

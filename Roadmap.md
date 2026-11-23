@@ -12,17 +12,19 @@ Ideas and planned improvements for NormJS, roughly ordered by value.
 ## Statistics
 - [ ] Optional true t-distribution mode: accept sample size / degrees of freedom
       and switch the statistic and critical values from z to t.
-- [ ] Show the p-value alongside the test statistic.
-- [ ] One- vs two-tailed test selection.
+- [x] Show the p-value alongside the test statistic.
+- [x] One- vs two-tailed test selection.
 
 ## UX
 - [ ] Clamp or normalize out-of-range inputs rather than only rejecting them.
-- [ ] Persist inputs in the URL (shareable links) or localStorage.
+      (Partly done: sliders and dragged markers clamp; typed values are still
+      only rejected.)
+- [x] Persist inputs in the URL (shareable links) or localStorage.
 - [ ] Review keyboard accessibility and mobile layout.
-- [ ] Dark mode.
+- [x] Dark mode.
 
 ## Code quality
-- [ ] Remove the dead `start === end` float-equality guards in the plot
+- [x] Remove the dead `start === end` float-equality guards in the plot
       functions.
 - [ ] Fix z-table column alignment at range boundaries (out-of-range cells are
       skipped rather than rendered empty, which shifts columns).

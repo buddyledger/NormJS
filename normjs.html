@@ -15,13 +15,13 @@
         :root {
             --bg: #f4f6f9; --card: #ffffff; --border: #e2e8f0; --text: #1e293b; --muted: #64748b;
             --accent: #2563eb; --accent-soft: #dbeafe; --highlight: #fde68a; --danger: #dc2626;
-            --thead-bg: #f1f5f9; --zebra: #fafbfc;
+            --thead-bg: #f1f5f9; --zebra: #fafbfc; --hl-bound: #99f6e4; --hl-stat: #ddd6fe;
             --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04); --radius: 10px;
         }
         [data-theme="dark"] {
             --bg: #0f172a; --card: #1e293b; --border: #334155; --text: #e2e8f0; --muted: #94a3b8;
             --accent: #60a5fa; --accent-soft: #1e3a5f; --highlight: #a16207; --danger: #f87171;
-            --thead-bg: #334155; --zebra: #243044;
+            --thead-bg: #334155; --zebra: #243044; --hl-bound: #0f766e; --hl-stat: #6d28d9;
             --shadow: 0 1px 3px rgba(0,0,0,0.4);
         }
         * { box-sizing: border-box; }
@@ -105,6 +105,8 @@
         thead th { position: sticky; top: 0; background: var(--thead-bg); font-weight: 600; z-index: 1; }
         tbody tr:nth-child(even) { background: var(--zebra); }
         td.highlight { background: var(--highlight) !important; font-weight: 600; }
+        td.highlight.hl-bound { background: var(--hl-bound) !important; }
+        td.highlight.hl-stat { background: var(--hl-stat) !important; }
 
         @media (max-width: 860px) { .quadrants { grid-template-columns: minmax(0, 1fr); } }
 
@@ -118,7 +120,8 @@
         .walk p { margin: 6px 0; }
         .walk strong { color: var(--text); }
         .explain { margin: 10px 0 0; color: var(--muted); font-size: 0.85rem; }
-        .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; color: var(--muted); font-size: 0.78rem; }
+        .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0 4px; padding: 8px 10px; border: 1px solid var(--border);
+                  border-radius: 8px; color: var(--muted); font-size: 0.78rem; }
         .legend .key { white-space: nowrap; }
         .legend i { display: inline-block; width: 18px; border-top: 2px solid; vertical-align: middle; margin-right: 5px; }
         .legend i.fill { height: 10px; border: 0; border-radius: 2px; }
@@ -208,9 +211,9 @@
                     <button type="button" class="btn btn-sm" id="png-standard">PNG</button>
                 </div>
                 <div id="plot-standard"></div>
+                <div class="legend" id="legend-standard"></div>
                 <div class="output" id="output-standard"></div>
                 <p class="explain" id="explain-standard"></p>
-                <div class="legend" id="legend-standard"></div>
                 <details class="collapsible" open>
                     <summary>Equations</summary>
                     <div class="equation" id="equation-standard"></div>
@@ -222,13 +225,13 @@
                     <button type="button" class="btn btn-sm" id="png-scaled">PNG</button>
                 </div>
                 <div id="plot-scaled"></div>
+                <div class="legend" id="legend-scaled"></div>
                 <div class="output" id="output-scaled"></div>
                 <p class="explain" id="explain-curves">The <strong>red curve</strong> is centred on the null value X₀: it shows where sample means
                     would fall if H₀ were true, and its shaded tails are the rejection region. The <strong>blue curve</strong> is centred on the
                     observed mean m: its shaded middle is the confidence interval. They have the same width because they share one SE, which is
                     why the test and the interval always agree.</p>
                 <p class="explain" id="explain-scaled"></p>
-                <div class="legend" id="legend-scaled"></div>
                 <details class="collapsible" open>
                     <summary>Equations</summary>
                     <div class="equation" id="equation-scaled"></div>
@@ -262,6 +265,11 @@
                         <input type="range" id="maxZ-s" min="0" max="5" step="0.1" value="3">
                     </div>
                 </div>
+                <div class="legend" id="legend-table">
+                    <span class="key"><i class="fill" style="background:var(--hl-bound)"></i>interval percentile z-scores</span>
+                    <span class="key"><i class="fill" style="background:var(--hl-stat)"></i>test statistic z</span>
+                    <span class="drag">Each cell is Φ(z), the area under the standard normal to the left of z. Read z as the row label plus the column heading.</span>
+                </div>
                 <div class="table-container">
                     <table id="table-combined"></table>
                 </div>
@@ -284,9 +292,9 @@
                 <button type="button" class="btn" id="clear-samples">Clear</button>
             </div>
             <div id="plot-sampling"></div>
+            <div class="legend" id="legend-sampling"></div>
             <div class="output" id="sampling-stats" aria-live="polite"></div>
             <p class="explain" id="sampling-note"></p>
-            <div class="legend" id="legend-sampling"></div>
         </div>
     </div>
 
@@ -547,8 +555,10 @@
             function scaledAxis(m, sd, x0) {
                 const ownMin = Math.min(m, x0) - 4 * sd, ownMax = Math.max(m, x0) + 4 * sd;
                 const lo = Math.min(ownMin, -4), hi = Math.max(ownMax, 4);
-                // A scaled curve (8·SE wide) and the reference (8 wide) must each keep a third of the axis.
-                const showRef = (hi - lo) <= 3 * 8 * sd && (hi - lo) <= 3 * 8;
+                // Show the reference unless taking it in would squeeze a scaled curve (8·SE wide)
+                // into less than a third of the axis. A large SE never hides it: the reference
+                // then shows as a narrow spike, which is the point of the comparison.
+                const showRef = (hi - lo) <= 3 * 8 * sd;
                 return showRef ? { min: lo, max: hi, showRef } : { min: ownMin, max: ownMax, showRef };
             }
 
@@ -561,6 +571,7 @@
                     xs.push(x); ys.push(jStat.normal.pdf(x, m, sd)); cd.push(jStat.normal.cdf(x, m, sd));
                     nullY.push(jStat.normal.pdf(x, x0, sd)); refY.push(jStat.normal.pdf(x, 0, 1));
                 }
+                const peak = jStat.normal.pdf(0, 0, sd), refPeak = jStat.normal.pdf(0, 0, 1);
                 const data = [];
                 // Drawn first so it sits behind everything else.
                 if (ax.showRef) data.push({ x: xs, y: refY, type: 'scatter', mode: 'lines', name: 'reference',
@@ -585,7 +596,10 @@
                 ];
                 const layout = {
                     xaxis: { title: 'X', range: [minX, maxX], gridcolor: tc.grid, zerolinecolor: tc.grid },
-                    yaxis: { title: 'Probability Density', gridcolor: tc.grid, zerolinecolor: tc.grid },
+                    // With a large SE the reference is far taller than the scaled curves. Cap the
+                    // axis at 10× their peak so they never flatten into the baseline.
+                    yaxis: { title: 'Probability Density', range: [0, 1.06 * Math.min(Math.max(peak, ax.showRef ? refPeak : 0), 10 * peak)],
+                             gridcolor: tc.grid, zerolinecolor: tc.grid },
                     showlegend: false, height: 300, autosize: true, margin: { t: 24, r: 16, b: 44, l: 56 },
                     paper_bgcolor: tc.paper, plot_bgcolor: tc.plot, font: { color: tc.font }, shapes: shapes, annotations: annotations
                 };
@@ -602,7 +616,8 @@
                         : `${fmtNum(sd)}× as wide and ${fmtNum(1 / sd)}× as tall (${sd > 1 ? 'more' : 'less'} uncertainty spreads the same total area ${sd > 1 ? 'out' : 'into a narrower peak'})`;
                     text = `Compared with the standard normal, the blue curve is ${shift} and is ${shape}. ` +
                            'The mean moves the curve; the SE stretches it.';
-                    if (!ax.showRef) text += ' The standard normal is not drawn here: at these values the curves would not all be readable on one axis.';
+                    if (!ax.showRef) text += ' The standard normal is not drawn here: it is too far away, or too wide by comparison, to share an axis with these curves.';
+                    else if (refPeak > 10 * peak) text += ' The standard normal is so much taller here that its top is cut off.';
                 }
                 document.getElementById('explain-scaled').textContent = text;
                 document.getElementById('legend-scaled').innerHTML =
@@ -618,59 +633,57 @@
             }
 
             // --- Sampling simulator ---
-            // Each draw is one dot, stacked in the column (bin) it lands in, so the picture is
-            // a histogram the student can count. Past DOT_LIMIT draws the stacks are drawn as
-            // bars instead. The y axis is a count; the curve is the expected count per column.
+            // A density histogram under a fixed curve. The y axis is density and its range never
+            // changes, so the curve stays put and the histogram is what moves towards it.
+            // Each draw is one block, and every block has the same area, 1/n of the total: the
+            // blocks get thinner as draws are added. Past DOT_LIMIT draws the stacks are drawn
+            // as plain bars.
             function plotSampling() {
                 const s = lastState; if (!s) return;
                 const tc = themeColors();
                 const m = s.mean, sd = s.stddev, minX = m - 4 * sd, maxX = m + 4 * sd, w = (maxX - minX) / BINS;
                 const binOf = x => clamp(Math.floor((x - minX) / w), 0, BINS - 1);
                 const centre = b => minX + (b + 0.5) * w;
-                const n = samples.length, useDots = n <= DOT_LIMIT;
+                const n = samples.length, useBlocks = n <= DOT_LIMIT;
+                const h = n ? 1 / (n * w) : 0;           // density added by one draw
                 const counts = new Array(BINS).fill(0);
-                const dotsIn = { x: [], y: [] }, dotsOut = { x: [], y: [] };
+                const blocksIn = { x: [], base: [] }, blocksOut = { x: [], base: [] };
                 let inside = 0, last = null;
                 samples.forEach(x => {
                     const b = binOf(x), isIn = x >= s.xLower && x <= s.xUpper;
                     if (isIn) inside++;
-                    last = { x: centre(b), y: counts[b] + 0.5 };
-                    if (useDots) { const d = isIn ? dotsIn : dotsOut; d.x.push(last.x); d.y.push(last.y); }
+                    last = { x: centre(b), base: counts[b] * h };
+                    if (useBlocks) { const d = isIn ? blocksIn : blocksOut; d.x.push(last.x); d.base.push(last.base); }
                     counts[b]++;
                 });
-                const peak = jStat.normal.pdf(m, m, sd);
-                // Before the first draw there are no counts, so show the curve's shape only.
-                const scale = n ? n * w : 6 / peak;
-                const yMax = Math.max(8, Math.max(...counts) + 1.5, n * w * peak * 1.15);
+                const peak = jStat.normal.pdf(m, m, sd), yMax = 2 * peak;
+                const clipped = Math.max(...counts) * h > yMax;
                 const xs = [], ys = [];
-                for (let i = 0; i <= 200; i++) { const x = minX + i * (maxX - minX) / 200; xs.push(x); ys.push(jStat.normal.pdf(x, m, sd) * scale); }
-
-                // Dot diameter in pixels: as large as fits one column and one row.
-                const gd = document.getElementById('plot-sampling');
-                const plotW = Math.max(100, (gd.clientWidth || 800) - 72), plotH = 280 - 54;
-                const size = clamp(Math.min(plotW / BINS, plotH / yMax) * 0.85, 2, 11);
+                for (let i = 0; i <= 200; i++) { const x = minX + i * (maxX - minX) / 200; xs.push(x); ys.push(jStat.normal.pdf(x, m, sd)); }
 
                 const data = [];
-                if (!useDots) {
-                    data.push({ x: counts.map((_, b) => centre(b)), y: counts, type: 'bar', name: 'bars', width: w * 0.96,
-                        marker: { color: tc.curve, opacity: 0.45 }, hovertemplate: '%{y} draws<extra></extra>' });
+                if (!useBlocks) {
+                    data.push({ x: counts.map((_, b) => centre(b)), y: counts.map(c => c * h), type: 'bar', name: 'bars', width: w * 0.96,
+                        marker: { color: tc.curve, opacity: 0.45 }, customdata: counts, hovertemplate: '%{customdata} draws<extra></extra>' });
                 } else {
-                    const dots = (d, name, color) => ({ x: d.x, y: d.y, type: 'scatter', mode: 'markers', name: name,
-                        marker: { color: color, size: size }, hoverinfo: 'skip' });
-                    data.push(dots(dotsIn, 'dots', tc.curve), dots(dotsOut, 'dots-outside', tc.outside));
-                    // Ring the most recent draw so a single new dot is easy to find.
-                    if (last) data.push({ x: [last.x], y: [last.y], type: 'scatter', mode: 'markers', name: 'latest', hoverinfo: 'skip',
-                        marker: { color: 'rgba(0,0,0,0)', size: size + 4, line: { color: tc.latest, width: 2 } } });
+                    const blocks = (d, name, marker) => ({ x: d.x, y: d.x.map(() => h), base: d.base, type: 'bar', name: name,
+                        width: w * 0.92, marker: marker, hoverinfo: 'skip' });
+                    const edge = { color: tc.paper, width: n > 150 ? 0 : 1 };
+                    data.push(blocks(blocksIn, 'draws', { color: tc.curve, opacity: 0.6, line: edge }),
+                              blocks(blocksOut, 'draws-outside', { color: tc.outside, opacity: 0.8, line: edge }));
+                    // Outline the most recent draw so a single new block is easy to find.
+                    if (last) data.push(blocks({ x: [last.x], base: [last.base] }, 'latest',
+                        { color: 'rgba(0,0,0,0)', line: { color: tc.latest, width: 2 } }));
                 }
                 if (incoming !== null) data.push({ x: [centre(binOf(incoming))], y: [yMax * 0.95], type: 'scatter', mode: 'markers',
-                    name: 'incoming', hoverinfo: 'skip', marker: { color: tc.latest, size: Math.max(size, 8) } });
-                data.push({ x: xs, y: ys, type: 'scatter', mode: 'lines', name: 'expected', line: { color: tc.font, width: 1.5 }, hoverinfo: 'skip' });
+                    name: 'incoming', hoverinfo: 'skip', marker: { color: tc.latest, size: 10 } });
+                data.push({ x: xs, y: ys, type: 'scatter', mode: 'lines', name: 'expected', line: { color: tc.font, width: 2 }, hoverinfo: 'skip' });
 
                 const shapes = [s.xLower, s.xUpper].filter(Number.isFinite).map(x => vLine(clamp(x, minX, maxX), tc.ciLine, 'dot'));
                 const layout = {
                     xaxis: { title: 'X', range: [minX, maxX], gridcolor: tc.grid, zerolinecolor: tc.grid, fixedrange: true },
-                    yaxis: { title: n ? 'Draws per column' : '', range: [0, yMax], showticklabels: n > 0, gridcolor: tc.grid, zerolinecolor: tc.grid, fixedrange: true },
-                    showlegend: false, height: 280, autosize: true, margin: { t: 10, r: 16, b: 44, l: 56 },
+                    yaxis: { title: 'Probability Density', range: [0, yMax], gridcolor: tc.grid, zerolinecolor: tc.grid, fixedrange: true },
+                    showlegend: false, height: 280, autosize: true, margin: { t: 10, r: 16, b: 44, l: 56 }, barmode: 'overlay',
                     paper_bgcolor: tc.paper, plot_bgcolor: tc.plot, font: { color: tc.font }, shapes: shapes
                 };
                 Plotly.react('plot-sampling', data, layout, { responsive: true, displayModeBar: false });
@@ -688,16 +701,21 @@
                     if (n >= MAX_SAMPLES) parts.push('limit reached, clear to draw again');
                     statsEl.textContent = parts.join(' · ');
                 }
-                document.getElementById('sampling-note').textContent = useDots
-                    ? `Each dot is one draw. About ${level}% of draws should land between the dotted lines, but a small sample can miss that by a lot: ` +
-                      'compare the percentage after 10 draws, 100 and 1000. The line shows how many draws each column should hold on average.'
-                    : `Past ${DOT_LIMIT} draws the dots are replaced by bars. A histogram is the same stacks of draws, counted instead of drawn one by one. ` +
-                      'With this many draws the bars follow the line closely, and the share inside the interval settles near ' + level + '%.';
+                document.getElementById('sampling-note').textContent = !n
+                    ? 'The line is the distribution the draws come from. It does not move: the histogram of draws is what changes, and it closes in on the line as draws are added.'
+                    : useBlocks
+                    ? 'Each block is one draw, and every block has the same area, 1/n of the total, so the blocks get thinner as draws are added and the total area stays 1. ' +
+                      'The line does not move; the histogram closes in on it. ' +
+                      (clipped ? 'Some columns are still taller than the plot and are cut off at the top. ' : '') +
+                      `About ${level}% of draws should land between the dotted lines; compare the percentage after 10 draws, 100 and 1000.`
+                    : `Past ${DOT_LIMIT} draws the blocks are too thin to show one by one, so each column is drawn as a single bar of the same height. ` +
+                      `With this many draws the bars follow the line closely, and the share inside the interval settles near ${level}%.`;
                 document.getElementById('legend-sampling').innerHTML =
-                    (useDots ? legendKey('dot', `background:${tc.curve}`, 'draw inside the interval') + legendKey('dot', `background:${tc.outside}`, 'draw outside it') +
-                               legendKey('dot', `background:transparent;box-shadow:0 0 0 2px ${tc.latest}`, 'latest draw')
-                             : legendKey('fill', `background:${tc.curve};opacity:.45`, 'draws per column')) +
-                    legendKey('', `border-color:${tc.font}`, 'expected from N(m, SE)') +
+                    legendKey('', `border-color:${tc.font}`, 'distribution N(m, SE), fixed') +
+                    (useBlocks ? legendKey('fill', `background:${tc.curve};opacity:.6`, 'draw inside the interval') +
+                                 legendKey('fill', `background:${tc.outside};opacity:.8`, 'draw outside it') +
+                                 legendKey('fill', `background:transparent;box-shadow:inset 0 0 0 2px ${tc.latest}`, 'latest draw')
+                               : legendKey('fill', `background:${tc.curve};opacity:.45`, 'histogram of draws')) +
                     legendKey('', `border-color:${tc.ciLine};border-top-style:dotted`, 'interval bounds');
             }
             // Add `count` draws. Small runs arrive one at a time, each shown above the plot before
@@ -831,10 +849,11 @@
             }
 
             // --- Z-table ---
-            function isHighlighted(zValue, zLower, zUpper, zStat) {
-                return Math.abs(zValue - zLower) < 0.005 ||
-                       Math.abs(zValue - zUpper) < 0.005 ||
-                       Math.abs(zValue - zStat) < 0.005;
+            // Class for a highlighted cell: the statistic wins if it shares a cell with a bound.
+            function highlightClass(zValue, zLower, zUpper, zStat) {
+                if (Math.abs(zValue - zStat) < 0.005) return 'hl-stat';
+                if (Math.abs(zValue - zLower) < 0.005 || Math.abs(zValue - zUpper) < 0.005) return 'hl-bound';
+                return '';
             }
             // One row of the table. Everything is indexed in integer hundredths of z
             // (no float accumulation): the row for `tenths` holds sign*(10*tenths + d)
@@ -849,7 +868,8 @@
                     if (h < startH || h > endH) continue;
                     const zValue = h / 100;
                     cell.innerText = jStat.normal.cdf(zValue, 0, 1).toFixed(6);
-                    if (isHighlighted(zValue, zLower, zUpper, zStat)) cell.classList.add('highlight');
+                    const hl = highlightClass(zValue, zLower, zUpper, zStat);
+                    if (hl) cell.classList.add('highlight', hl);
                 }
             }
             function updateCombinedTable(zLower, zUpper, zStat, minZ, maxZ) {

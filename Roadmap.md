@@ -79,6 +79,7 @@ Ideas and planned improvements for NormJS, roughly ordered by value.
       percentiles to an advanced section.
 - [ ] Promote the verdict to a prominent result strip showing z, p, α and the
       interval.
+- [x] Legends directly under every plot and on the z-table.
 - [x] Label the plots: a legend for the interval, rejection region, null and
       statistic markers, and a hint that the markers are draggable.
 - [ ] Z-table as a lookup exercise: 4 decimals like printed tables, a
@@ -91,9 +92,9 @@ Ideas and planned improvements for NormJS, roughly ordered by value.
 - [ ] Tell the user when "Copy link" fails (clipboard access denied) instead of
       failing silently.
 - [x] Say so when changing the mean or SE clears the simulator's samples.
-- [x] Simulator: draw 1, 10, 100 or 1000 values at a time, shown as stacked
-      dots that become histogram bars past 400 draws, with the share of draws
-      inside the interval.
+- [x] Simulator: draw 1, 10, 100 or 1000 values at a time, shown as a density
+      histogram of equal-area blocks under a fixed curve (bars past 400 draws),
+      with the share of draws inside the interval.
 - [ ] Add `aria-pressed` to the tail buttons; the selected one is currently
       shown by colour only.
 - [ ] Give each plot a one-line text alternative for screen readers.

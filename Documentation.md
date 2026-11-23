@@ -62,7 +62,8 @@ purple line falls in the red shading.** For a two-tailed test with a central
 interval that is the same as the null value falling outside the interval,
 which is why the test and the interval always agree.
 
-Each plot has a legend under it naming the lines and shaded areas.
+Each plot has a legend directly under it naming every line and shaded area,
+and the z-table has one for its highlight colours.
 
 ### Scaled Normal panel
 
@@ -74,9 +75,12 @@ A grey dashed curve shows the standard normal N(0, 1) for comparison, and the
 axis widens to include it. Changing the mean slides the blue curve away from
 it; changing the SE makes both curves wider and lower, or narrower and taller.
 A sentence under the plot says the same in words ("shifted right by 2.3 and
-1.5× as wide and 0.67× as tall"). The reference curve is left out, and the
-sentence says so, when the curves could not all be read on one axis (for
-example m = 100, SE = 15).
+1.5× as wide and 0.67× as tall"). With a large SE the reference curve stays, as a narrow spike
+next to the wide scaled curves; once it is more than ten times their height its
+top is cut off so that they stay readable. The reference curve is left out,
+and the sentence says so, only when it is too far away to share the axis: when
+including it would squeeze the scaled curves into less than a third of the plot
+(for example m = 100, SE = 1).
 
 ### Standard Normal panel
 
@@ -119,8 +123,9 @@ the interval means reject.
 A standard normal CDF table over the chosen Z range, laid out like a printed
 z-table (tenths down the rows, hundredths across the columns). Values outside
 the chosen range are left blank so the columns stay aligned. Cells matching
-the interval's percentile z-scores (for example ±1.96) or the test statistic z
-are highlighted. The header row stays in view while
+the interval's percentile z-scores (for example ±1.96) are highlighted in teal
+and the cell for the test statistic z in purple; a legend above the table says
+which is which. The header row stays in view while
 scrolling, and the section can be collapsed.
 
 ### Sampling Simulator
@@ -128,16 +133,20 @@ scrolling, and the section can be collapsed.
 "Draw 1", "Draw 10", "Draw 100" and "Draw 1000" add that many random values
 from N(m, SE).
 
-- **Dots, then bars.** Each draw is a dot stacked in the column where it
-  landed (40 columns across m ± 4·SE), so the picture can be counted. Dots
-  inside the interval are blue, dots outside it are grey, and the latest draw
-  is ringed. Past 400 draws the stacks are drawn as histogram bars instead.
+- **A fixed curve.** The line is the density of N(m, SE), the distribution the
+  draws come from. The y axis is density and its range never changes, so the
+  line stays where it is and the histogram of draws is what moves towards it.
+- **Blocks, then bars.** Each draw is a block in the column where it landed
+  (40 columns across m ± 4·SE). Every block has the same area, 1/n of the
+  total, so the blocks get thinner as draws are added and the total area stays
+  1. Blocks inside the interval are blue, blocks outside it are grey, and the
+  latest draw is outlined. With only a few draws the columns tower over the
+  line (and are cut off at the top of the plot); with many they settle onto
+  it. Past 400 draws each column is drawn as a single bar.
 - **Animation.** Runs of up to 10 arrive one at a time: each value appears
-  above the plot and then drops into its column. Larger runs arrive in batches
+  above the plot and then lands in its column. Larger runs arrive in batches
   over about a second. If the browser asks for reduced motion, all draws are
   added at once.
-- **Expected line.** The line is the number of draws each column should hold
-  on average, n × column width × density, so it grows with the stacks.
 - **Statistics.** Under the plot: the number of draws, their mean and standard
   deviation next to m and SE, and how many fell inside the interval ("96 of
   100 (96.0%) inside the 95% interval"). With few draws that share can be far

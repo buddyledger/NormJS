@@ -31,8 +31,9 @@ in the browser; there is nothing to install.
 - **A z-table.** A standard normal cumulative table laid out like a printed
   one, with the cells for the current interval and null value highlighted.
 - **A sampling simulator.** Draw 1, 10, 100 or 1000 random values from the
-  scaled normal. Each draw drops in as a dot; the pile looks nothing like the
-  curve at first and settles onto it as the draws add up.
+  scaled normal. The curve stays fixed while each draw adds a block to a
+  histogram, which looks nothing like the curve at first and settles onto it
+  as the draws add up.
 - **Sharing and export.** The address bar always holds a link to the current
   state. Plots download as PNG and the table as CSV. There is a dark mode.
 

@@ -33,6 +33,22 @@ Ideas and planned improvements for NormJS, roughly ordered by value.
       reject at 5%, two-tailed).
 - [ ] Worked scenarios: two or three preset stories (a factory claim, an exam
       average) that load values and give the numbers meaning.
+- [ ] Confidence-interval coverage simulation: draw 100 samples, plot their
+      intervals as stacked bars, and colour the ones that miss the true mean,
+      to show what "95% confident" means.
+- [ ] Power and Type II error: overlay an alternative distribution next to the
+      null one and shade β and power.
+- [ ] Predict-then-reveal mode: hide the verdict and p-value until the student
+      commits to "reject" or "fail to reject".
+- [ ] Probability lookup mode: answer "what is P(a < X < b)?" and the inverse,
+      "which x has 90% below it?".
+- [ ] 68–95–99.7 rule overlay: a toggle that shades ±1, ±2 and ±3 SE bands.
+
+## For teachers
+- [ ] Embed mode: a URL flag that hides the header and toolbar so the tool fits
+      in an LMS page or slide.
+- [ ] Print stylesheet: a one-page handout of the current state (plots,
+      walkthrough and the relevant table rows).
 
 ## UX
 - [ ] Clamp or normalize out-of-range inputs rather than only rejecting them.
@@ -58,6 +74,12 @@ Ideas and planned improvements for NormJS, roughly ordered by value.
       simulator.
 - [ ] Show an active state on the 90/95/99% presets.
 - [ ] Default the theme to the system preference (`prefers-color-scheme`).
+- [ ] Tell the user when "Copy link" fails (clipboard access denied) instead of
+      failing silently.
+- [ ] Say so when changing the mean or SE clears the simulator's samples.
+- [ ] Add `aria-pressed` to the tail buttons; the selected one is currently
+      shown by colour only.
+- [ ] Give each plot a one-line text alternative for screen readers.
 
 ## Visual design
 - [ ] One meaning per colour across plots, table, badges and walkthrough. The
@@ -77,7 +99,12 @@ Ideas and planned improvements for NormJS, roughly ordered by value.
 - [ ] Fix z-table column alignment at range boundaries (out-of-range cells are
       skipped rather than rendered empty, which shifts columns).
 - [ ] Add an automated test suite (logic-level, plus headless browser once the
-      libraries are vendored).
+      libraries are vendored). Now unblocked: start with a Playwright smoke
+      test (page loads, three plots render, a right-tailed case gives the right
+      verdict) run by GitHub Actions on each pull request.
+- [ ] Add a `.gitattributes` that keeps `vendor/` byte-identical to upstream
+      (no line-ending conversion) and marks it as vendored.
+- [ ] Add a `LICENSE` file for the project itself so others can reuse it.
 - [ ] Typeset only the equation containers on update instead of re-running
       MathJax over the whole page.
 
